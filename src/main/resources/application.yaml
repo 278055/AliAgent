@@ -11,6 +11,19 @@ spring:
       chat:
         options:
           model: qwen-plus
+      embedding:
+        enabled: true
+        options:
+          model: text-embedding-v3
+          dimensions: 1024
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1024
+        initialize-schema: false
+        table-name: document_chunk
+        remove-existing-vector-store-table: false
   datasource:
     url: jdbc:postgresql://localhost:5432/postgres
     username: postgres

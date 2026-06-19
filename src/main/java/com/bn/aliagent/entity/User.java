@@ -6,9 +6,10 @@ import java.time.LocalDateTime;
 
 /**
  * 用户实体类，对应数据库中的 "user" 表
+ * 注意：user 是 PostgreSQL 保留关键字，必须用双引号包裹表名
  */
 @Data
-@TableName("user")
+@TableName("users")
 public class User {
 
     @TableId(type = IdType.ASSIGN_UUID)

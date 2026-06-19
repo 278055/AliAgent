@@ -36,6 +36,12 @@ public class Message {
     private String content;
 
     /**
+     * 扩展元数据（JSON 格式）
+     * 典型用途：RAG 来源引用 {"sources":[{"chunkId":"..","documentName":"..","content":"..","score":0.92}]}
+     */
+    private String metadata;
+
+    /**
      * 消息创建时间
      * 由 MyMetaObjectHandler 在插入时自动填充
      */

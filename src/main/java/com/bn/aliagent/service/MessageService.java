@@ -6,9 +6,12 @@ import com.bn.aliagent.entity.Message;
 import com.bn.aliagent.mapper.MessageMapper;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 消息业务逻辑层
@@ -18,19 +21,36 @@ import java.util.List;
 @Service
 public class MessageService extends ServiceImpl<MessageMapper, Message> {
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     /**
-     * 保存一条消息到数据库
+     * 保存一条消息到数据库（不含元数据）
      *
      * @param conversationId 所属会话 ID
      * @param role           消息角色：user 或 assistant
      * @param content        消息内容
      */
     public void saveMessage(String conversationId, String role, String content) {
-        Message message = new Message();
-        message.setConversationId(conversationId);
-        message.setRole(role);
-        message.setContent(content);
-        this.save(message);
+        saveMessage(conversationId, role, content, "{}");
+    }
+
+    /**
+     * 保存一条消息到数据库（含元数据）
+     *
+     * <p>通过 JDBC 直写，确保 metadata 字段正确以 JSONB 类型入库。</p>
+     *
+     * @param conversationId 所属会话 ID
+     * @param role           消息角色：user 或 assistant
+     * @param content        消息内容
+     * @param metadata       扩展元数据（JSON 字符串），如 RAG 来源引用
+     */
+    public void saveMessage(String conversationId, String role, String content, String metadata) {
+        jdbcTemplate.update("""
+                INSERT INTO message (id, conversation_id, role, content, metadata, created_at)
+                VALUES (?, ?, ?, ?, ?::jsonb, NOW())
+                """, UUID.randomUUID().toString(), conversationId, role, content,
+                metadata != null ? metadata : "{}");
     }
 
     /**
