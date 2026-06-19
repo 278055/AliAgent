@@ -1,0 +1,391 @@
+/* AliAgent - ChatGPT-like light design system */
+
+:root {
+  --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', Consolas, Monaco, monospace;
+
+  --sidebar-width: 256px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --transition-fast: 0.15s ease;
+  --transition-smooth: 0.2s ease;
+  --transition-entrance: 0.35s ease;
+}
+
+:root,
+html[data-theme='light'] {
+  --bg-page: #ffffff;
+  --bg-sidebar: #f7f7f8;
+  --bg-sidebar-hover: #ececf1;
+  --bg-surface: #ffffff;
+  --bg-surface-muted: #f7f7f8;
+  --bg-message-user: #e7f2ff;
+  --bg-message-assistant: transparent;
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-tertiary: #8a8f98;
+  --text-inverse: #ffffff;
+
+  --border-subtle: #e5e7eb;
+  --border-strong: #d1d5db;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: #eff6ff;
+
+  --success: #16a34a;
+  --success-soft: #f0fdf4;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.10);
+  --shadow-input: 0 8px 30px rgba(0, 0, 0, 0.10);
+
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  --bg-page: #202123;
+  --bg-sidebar: #171717;
+  --bg-sidebar-hover: #2f2f2f;
+  --bg-surface: #2b2c2f;
+  --bg-surface-muted: #343541;
+  --bg-message-user: #2f4056;
+  --bg-message-assistant: transparent;
+
+  --text-primary: #f3f4f6;
+  --text-secondary: #d1d5db;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-soft: rgba(59, 130, 246, 0.14);
+
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.36);
+  --shadow-input: 0 8px 30px rgba(0, 0, 0, 0.35);
+
+  color-scheme: dark;
+}
+
+html[data-theme] {
+  /* Compatibility aliases for existing components during the UI migration. */
+  --bg-void: var(--bg-page);
+  --bg-deep: var(--bg-sidebar);
+  --bg-elevated: var(--bg-surface-muted);
+  --bg-glass: var(--bg-surface);
+  --bg-glass-strong: var(--bg-surface);
+
+  --border-void: var(--border-subtle);
+  --border-medium: var(--border-subtle);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-bg: var(--bg-sidebar);
+
+  --text-void: var(--text-tertiary);
+  --text-muted: var(--text-secondary);
+  --text-body: var(--text-primary);
+  --text-bright: var(--text-primary);
+
+  --accent-aurora: var(--accent);
+  --accent-aurora-dim: var(--accent-soft);
+  --accent-cyan: var(--success);
+  --accent-cyan-dim: var(--success-soft);
+  --accent-rose: var(--danger);
+  --accent-rose-dim: var(--danger-soft);
+
+  --gradient-aurora: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  --gradient-aurora-subtle: var(--accent-soft);
+  --gradient-cosmic: var(--bg-page);
+  --gradient-glass: var(--bg-surface);
+
+  --shadow-aurora: var(--shadow-sm);
+  --shadow-glow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  --shadow-elevated: var(--shadow-sm);
+  --shadow-float: var(--shadow-md);
+
+  --user-bubble-bg: var(--bg-message-user);
+  --user-bubble-border: transparent;
+  --assistant-bubble-bg: var(--bg-message-assistant);
+  --assistant-bubble-border: transparent;
+
+  --input-bg: var(--bg-surface);
+  --input-border: var(--border-subtle);
+  --input-focus-border: var(--accent);
+  --input-focus-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-tertiary) 38%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-tertiary) 56%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.bg-noise {
+  position: relative;
+}
+
+.glass,
+.glass-strong {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.aurora-text {
+  color: var(--text-primary);
+}
+
+.aurora-border {
+  border: 1px solid var(--border-subtle);
+}
+
+.aurora-glow {
+  box-shadow: var(--shadow-sm);
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes stream-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-aurora {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp var(--transition-entrance) forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-entrance) forwards;
+}
+
+.animate-slide-left {
+  animation: slideInLeft var(--transition-entrance) forwards;
+}
+
+.animate-slide-right {
+  animation: slideInRight var(--transition-entrance) forwards;
+}
+
+.markdown-content {
+  color: var(--text-primary);
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  font-family: var(--font-display);
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 1em 0 0.5em;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.markdown-content h1 { font-size: 1.45em; }
+.markdown-content h2 { font-size: 1.22em; }
+.markdown-content h3 { font-size: 1.08em; }
+
+.markdown-content p {
+  margin: 0.5em 0;
+  line-height: 1.7;
+}
+
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 0.55em 0;
+  padding-left: 1.4em;
+}
+
+.markdown-content li {
+  margin: 0.25em 0;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 0.55em 0.85em;
+  margin: 0.8em 0;
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.markdown-content code {
+  font-family: var(--font-mono);
+  background: var(--bg-surface-muted);
+  border: 1px solid var(--border-subtle);
+  padding: 0.14em 0.38em;
+  border-radius: 5px;
+  font-size: 0.88em;
+  color: var(--text-primary);
+}
+
+.markdown-content pre {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: var(--radius-md);
+  padding: 1em;
+  margin: 0.9em 0;
+  overflow-x: auto;
+  box-shadow: var(--shadow-xs);
+}
+
+.markdown-content pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #f9fafb;
+  font-size: 0.85em;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--bg-surface-muted);
+  font-weight: 650;
+}
+
+.markdown-content hr {
+  border: none;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 1.4em 0;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 280px;
+  }
+}
