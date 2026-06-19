@@ -42,8 +42,8 @@ temp/
 ### Local screenshots / test fixtures ###
 screenshot*.png
 screenshots/
-tag-test-*.txt
-test-doc.txt
+/tag-test-*.txt
+/test-doc.txt
 
 ### Local agent / assistant config ###
 .codex/
