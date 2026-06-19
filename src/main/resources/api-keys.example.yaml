@@ -1,0 +1,5 @@
+# Copy this file to api-keys.yaml and fill in your local key.
+spring:
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
