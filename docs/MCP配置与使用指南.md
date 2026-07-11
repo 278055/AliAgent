@@ -91,7 +91,7 @@ java -cp "/tmp:$PG_JAR" YourScript
 | 服务 | 地址 | 端口 | 用户 | 密码 |
 |------|------|------|------|------|
 | PostgreSQL | localhost | 5432 | postgres | 123456 |
-| Redis | localhost | 6379 | - | - |
+| Redis | localhost | 6600 | - | - |
 
 ### 关键扩展与版本
 
