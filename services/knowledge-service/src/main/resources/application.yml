@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: knowledge-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+  flyway:
+    enabled: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+nacos:
+  discovery:
+    server-addr: ${NACOS_SERVER_ADDR:}
+logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} service=knowledge-service]"
