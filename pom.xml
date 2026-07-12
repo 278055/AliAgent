@@ -14,6 +14,7 @@
 
     <modules>
         <module>contracts/contract-validator</module>
+        <module>platform/platform-service-security</module>
         <module>services/gateway-service</module>
         <module>services/conversation-service</module>
         <module>services/ai-orchestration-service</module>
@@ -32,6 +33,7 @@
         <spring-ai.version>1.1.2</spring-ai.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencyManagement>
@@ -42,6 +44,11 @@
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
@@ -75,6 +82,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

@@ -1,6 +1,6 @@
 # 前端工作区骨架
 
-根目录保留现有 Vue + Vite 应用，`npm run dev` 与 `npm run build` 继续直接使用 `src/` 和现有 Vite 配置。P1 不迁移聊天、RAG 页面或静态资源。
+根目录保留现有 Vue + Vite 应用，`npm run dev` 与 `npm run build` 继续直接使用 `src/` 和现有 Vite 配置。构建产物输出到 `frontend/dist`，不会修改根单体的已跟踪静态资源。P1 不迁移聊天、RAG 页面或静态资源。
 
 `pnpm-workspace.yaml` 为后续前端拆分预留以下位置：
 
