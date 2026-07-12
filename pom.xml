@@ -14,12 +14,6 @@
 
     <modules>
         <module>contracts/contract-validator</module>
-        <module>services/gateway-service</module>
-        <module>services/conversation-service</module>
-        <module>services/ai-orchestration-service</module>
-        <module>services/knowledge-service</module>
-        <module>services/evaluation-service</module>
-        <module>services/insight-service</module>
     </modules>
 
     <properties>
