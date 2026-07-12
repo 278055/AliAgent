@@ -1,0 +1,12 @@
+spring:
+  config:
+    activate:
+      on-profile: database
+  autoconfigure:
+    exclude: []
+  datasource:
+    url: ${CONVERSATION_DB_URL}
+    username: ${CONVERSATION_DB_USERNAME}
+    password: ${CONVERSATION_DB_PASSWORD}
+  flyway:
+    enabled: true

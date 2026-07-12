@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "workspace:list": "pnpm -r list --depth -1"
   },
   "dependencies": {
     "vue": "^3.5.13",
