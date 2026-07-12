@@ -1,0 +1,12 @@
+spring:
+  config:
+    activate:
+      on-profile: database
+  autoconfigure:
+    exclude: []
+  datasource:
+    url: ${KNOWLEDGE_DB_URL}
+    username: ${KNOWLEDGE_DB_USERNAME}
+    password: ${KNOWLEDGE_DB_PASSWORD}
+  flyway:
+    enabled: true

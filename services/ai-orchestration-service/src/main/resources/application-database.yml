@@ -1,0 +1,12 @@
+spring:
+  config:
+    activate:
+      on-profile: database
+  autoconfigure:
+    exclude: []
+  datasource:
+    url: ${ORCHESTRATION_DB_URL}
+    username: ${ORCHESTRATION_DB_USERNAME}
+    password: ${ORCHESTRATION_DB_PASSWORD}
+  flyway:
+    enabled: true

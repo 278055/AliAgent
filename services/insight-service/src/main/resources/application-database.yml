@@ -1,0 +1,12 @@
+spring:
+  config:
+    activate:
+      on-profile: database
+  autoconfigure:
+    exclude: []
+  datasource:
+    url: ${INSIGHT_DB_URL}
+    username: ${INSIGHT_DB_USERNAME}
+    password: ${INSIGHT_DB_PASSWORD}
+  flyway:
+    enabled: true

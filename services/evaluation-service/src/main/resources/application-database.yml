@@ -1,0 +1,12 @@
+spring:
+  config:
+    activate:
+      on-profile: database
+  autoconfigure:
+    exclude: []
+  datasource:
+    url: ${EVALUATION_DB_URL}
+    username: ${EVALUATION_DB_USERNAME}
+    password: ${EVALUATION_DB_PASSWORD}
+  flyway:
+    enabled: true
