@@ -1,35 +1,41 @@
 package com.bn.aliagent;
 
+import com.bn.aliagent.Controller.HealthController;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+/**
+ * 离线冒烟测试：只验证不依赖外部资源的健康探针契约。
+ */
 class AliAgentApplicationTests {
 
-    @Autowired
-    private ChatClient chatClient;
+    private MockMvc mockMvc;
 
-    @Test
-    void contextLoads() {
-        assertThat(chatClient).isNotNull();
+    @BeforeEach
+    void setUp() {
+        // 独立装配控制器，避免启动数据库、Redis 与 DashScope 自动配置。
+        mockMvc = MockMvcBuilders.standaloneSetup(new HealthController()).build();
     }
 
     @Test
-    void testChatWithQwen() {
-        String response = chatClient.prompt()
-                .user("请用一句话介绍一下你自己")
-                .call()
-                .content();
+    void healthEndpointReturnsOkWithoutExternalDependencies() throws Exception {
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/plain"))
+                .andExpect(content().string("ok"));
+    }
 
-        System.out.println("========== 千问回复 ==========");
-        System.out.println(response);
-        System.out.println("==============================");
-
-        assertThat(response).isNotNull().isNotEmpty();
+    @Test
+    void healthStreamReturnsSingleOkEventWithoutExternalDependencies() throws Exception {
+        mockMvc.perform(get("/api/health/stream"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/event-stream"))
+                .andExpect(content().string("data:ok\n\n"));
     }
 }
