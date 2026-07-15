@@ -29,7 +29,7 @@ class JwtAuthenticationTokenFilterTest {
         String token = tokenUtil.generateToken(IdentityTokenClaims.of(
                 "42", "member-login", SubjectType.MEMBER, "dev-tenant",
                 Arrays.asList("MEMBER"), Arrays.asList("mall:portal:access")));
-        String tamperedToken = token.substring(0, token.length() - 1) + "x";
+        String tamperedToken = tamperPayload(token);
 
         assertRejected(tamperedToken);
     }
@@ -68,5 +68,12 @@ class JwtAuthenticationTokenFilterTest {
 
         assertFalse(SecurityContextHolder.getContext().getAuthentication() != null);
         assertFalse(!unauthenticated.get());
+    }
+
+    private String tamperPayload(String token) {
+        int payloadStart = token.indexOf('.') + 1;
+        char original = token.charAt(payloadStart);
+        char replacement = original == 'A' ? 'B' : 'A';
+        return token.substring(0, payloadStart) + replacement + token.substring(payloadStart + 1);
     }
 }
