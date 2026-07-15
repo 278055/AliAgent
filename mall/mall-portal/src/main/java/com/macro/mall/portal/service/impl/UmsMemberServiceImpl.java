@@ -12,6 +12,8 @@ import com.macro.mall.portal.domain.MemberDetails;
 import com.macro.mall.portal.service.UmsMemberCacheService;
 import com.macro.mall.portal.service.UmsMemberService;
 import com.macro.mall.security.util.JwtTokenUtil;
+import com.macro.mall.security.identity.IdentityTokenClaims;
+import com.macro.mall.security.identity.SubjectType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
+import java.util.Collections;
 
 /**
  * 会员管理Service实现类
@@ -53,6 +56,8 @@ public class UmsMemberServiceImpl implements UmsMemberService {
     private String REDIS_KEY_PREFIX_AUTH_CODE;
     @Value("${redis.expire.authCode}")
     private Long AUTH_CODE_EXPIRE_SECONDS;
+    @Value("${jwt.tenant-id}")
+    private String tenantId;
 
     @Override
     public UmsMember getByUsername(String username) {
@@ -172,7 +177,10 @@ public class UmsMemberServiceImpl implements UmsMemberService {
             }
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            token = jwtTokenUtil.generateToken(userDetails);
+            UmsMember member = getByUsername(username);
+            token = jwtTokenUtil.generateToken(IdentityTokenClaims.of(
+                    String.valueOf(member.getId()), member.getUsername(), SubjectType.MEMBER, tenantId,
+                    Collections.singletonList("MEMBER"), Collections.singletonList("mall:portal:access")));
         } catch (AuthenticationException e) {
             LOGGER.warn("登录异常:{}", e.getMessage());
         }

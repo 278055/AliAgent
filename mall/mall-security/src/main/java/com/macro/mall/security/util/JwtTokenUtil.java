@@ -1,18 +1,21 @@
 package com.macro.mall.security.util;
 
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
+import com.macro.mall.security.identity.IdentityTokenClaims;
+import com.macro.mall.security.identity.IdentityContext;
+import com.macro.mall.security.identity.IdentityTokenException;
+import com.macro.mall.security.identity.SubjectType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * JwtToken生成的工具类
@@ -26,9 +29,11 @@ import java.util.Map;
  * Created by macro on 2018/4/26.
  */
 public class JwtTokenUtil {
-    private static final Logger LOGGER = LoggerFactory.getLogger(JwtTokenUtil.class);
-    private static final String CLAIM_KEY_USERNAME = "sub";
-    private static final String CLAIM_KEY_CREATED = "created";
+    private static final String CLAIM_KEY_LOGIN_NAME = "loginName";
+    private static final String CLAIM_KEY_SUBJECT_TYPE = "subjectType";
+    private static final String CLAIM_KEY_TENANT_ID = "tenantId";
+    private static final String CLAIM_KEY_ROLES = "roles";
+    private static final String CLAIM_KEY_PERMISSIONS = "permissions";
     @Value("${jwt.secret}")
     private String secret;
     @Value("${jwt.expiration}")
@@ -36,12 +41,23 @@ public class JwtTokenUtil {
     @Value("${jwt.tokenHead}")
     private String tokenHead;
 
+    public JwtTokenUtil() {
+    }
+
+    public JwtTokenUtil(String secret, Long expiration, String tokenHead) {
+        this.secret = secret;
+        this.expiration = expiration;
+        this.tokenHead = tokenHead;
+    }
+
     /**
      * 根据负责生成JWT的token
      */
     private String generateToken(Map<String, Object> claims) {
         return Jwts.builder()
                 .setClaims(claims)
+                .setIssuedAt(new Date())
+                .setId(UUID.randomUUID().toString())
                 .setExpiration(generateExpirationDate())
                 .signWith(SignatureAlgorithm.HS512, secret)
                 .compact();
@@ -50,17 +66,32 @@ public class JwtTokenUtil {
     /**
      * 从token中获取JWT中的负载
      */
-    private Claims getClaimsFromToken(String token) {
-        Claims claims = null;
+    public Claims parseAndValidate(String token) {
         try {
-            claims = Jwts.parser()
+            Claims claims = Jwts.parser()
                     .setSigningKey(secret)
                     .parseClaimsJws(token)
                     .getBody();
-        } catch (Exception e) {
-            LOGGER.info("JWT格式验证失败:{}", token);
+            validateRequiredClaims(claims);
+            return claims;
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new IdentityTokenException("Invalid identity token", e);
         }
-        return claims;
+    }
+
+    private void validateRequiredClaims(Claims claims) {
+        if (isBlank(claims.getSubject()) || isBlank(claims.get(CLAIM_KEY_LOGIN_NAME, String.class))
+                || isBlank(claims.get(CLAIM_KEY_SUBJECT_TYPE, String.class))
+                || isBlank(claims.get(CLAIM_KEY_TENANT_ID, String.class))
+                || claims.get(CLAIM_KEY_ROLES) == null || claims.get(CLAIM_KEY_PERMISSIONS) == null
+                || claims.getIssuedAt() == null || claims.getExpiration() == null || isBlank(claims.getId())) {
+            throw new IdentityTokenException("Identity token misses required claims");
+        }
+        try {
+            SubjectType.valueOf(claims.get(CLAIM_KEY_SUBJECT_TYPE, String.class));
+        } catch (IllegalArgumentException e) {
+            throw new IdentityTokenException("Identity token has an invalid subject type", e);
+        }
     }
 
     /**
@@ -74,14 +105,11 @@ public class JwtTokenUtil {
      * 从token中获取登录用户名
      */
     public String getUserNameFromToken(String token) {
-        String username;
         try {
-            Claims claims = getClaimsFromToken(token);
-            username = claims.getSubject();
-        } catch (Exception e) {
-            username = null;
+            return parseAndValidate(token).get(CLAIM_KEY_LOGIN_NAME, String.class);
+        } catch (IdentityTokenException e) {
+            return null;
         }
-        return username;
     }
 
     /**
@@ -90,34 +118,22 @@ public class JwtTokenUtil {
      * @param token       客户端传入的token
      * @param userDetails 从数据库中查询出来的用户信息
      */
-    public boolean validateToken(String token, UserDetails userDetails) {
-        String username = getUserNameFromToken(token);
-        return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+    public boolean validateToken(String token, String username) {
+        return username.equals(getUserNameFromToken(token));
     }
 
-    /**
-     * 判断token是否已经失效
-     */
-    private boolean isTokenExpired(String token) {
-        Date expiredDate = getExpiredDateFromToken(token);
-        return expiredDate.before(new Date());
+    public IdentityContext getIdentityContext(String token) {
+        return IdentityContext.from(parseAndValidate(token));
     }
 
-    /**
-     * 从token中获取过期时间
-     */
-    private Date getExpiredDateFromToken(String token) {
-        Claims claims = getClaimsFromToken(token);
-        return claims.getExpiration();
-    }
-
-    /**
-     * 根据用户信息生成token
-     */
-    public String generateToken(UserDetails userDetails) {
+    public String generateToken(IdentityTokenClaims identity) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put(CLAIM_KEY_USERNAME, userDetails.getUsername());
-        claims.put(CLAIM_KEY_CREATED, new Date());
+        claims.put(Claims.SUBJECT, identity.getSubjectId());
+        claims.put(CLAIM_KEY_LOGIN_NAME, identity.getLoginName());
+        claims.put(CLAIM_KEY_SUBJECT_TYPE, identity.getSubjectType().name());
+        claims.put(CLAIM_KEY_TENANT_ID, identity.getTenantId());
+        claims.put(CLAIM_KEY_ROLES, identity.getRoles());
+        claims.put(CLAIM_KEY_PERMISSIONS, identity.getPermissions());
         return generateToken(claims);
     }
 
@@ -134,22 +150,17 @@ public class JwtTokenUtil {
         if(StrUtil.isEmpty(token)){
             return null;
         }
-        //token校验不通过
-        Claims claims = getClaimsFromToken(token);
-        if(claims==null){
+        Claims claims;
+        try {
+            claims = parseAndValidate(token);
+        } catch (IdentityTokenException e) {
             return null;
         }
-        //如果token已经过期，不支持刷新
-        if(isTokenExpired(token)){
-            return null;
-        }
-        //如果token在30分钟之内刚刷新过，返回原token
-        if(tokenRefreshJustBefore(token,30*60)){
-            return token;
-        }else{
-            claims.put(CLAIM_KEY_CREATED, new Date());
-            return generateToken(claims);
-        }
+        return generateToken(IdentityTokenClaims.of(
+                claims.getSubject(), claims.get(CLAIM_KEY_LOGIN_NAME, String.class),
+                com.macro.mall.security.identity.SubjectType.valueOf(claims.get(CLAIM_KEY_SUBJECT_TYPE, String.class)),
+                claims.get(CLAIM_KEY_TENANT_ID, String.class),
+                claims.get(CLAIM_KEY_ROLES, List.class), claims.get(CLAIM_KEY_PERMISSIONS, List.class)));
     }
 
     /**
@@ -157,14 +168,7 @@ public class JwtTokenUtil {
      * @param token 原token
      * @param time 指定时间（秒）
      */
-    private boolean tokenRefreshJustBefore(String token, int time) {
-        Claims claims = getClaimsFromToken(token);
-        Date created = claims.get(CLAIM_KEY_CREATED, Date.class);
-        Date refreshDate = new Date();
-        //刷新时间在创建时间的指定时间内
-        if(refreshDate.after(created)&&refreshDate.before(DateUtil.offsetSecond(created,time))){
-            return true;
-        }
-        return false;
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

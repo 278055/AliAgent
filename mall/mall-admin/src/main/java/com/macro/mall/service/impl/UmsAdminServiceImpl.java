@@ -14,6 +14,8 @@ import com.macro.mall.mapper.UmsAdminMapper;
 import com.macro.mall.mapper.UmsAdminRoleRelationMapper;
 import com.macro.mall.model.*;
 import com.macro.mall.security.util.JwtTokenUtil;
+import com.macro.mall.security.identity.IdentityTokenClaims;
+import com.macro.mall.security.identity.SubjectType;
 import com.macro.mall.security.util.SpringUtil;
 import com.macro.mall.service.UmsAdminCacheService;
 import com.macro.mall.service.UmsAdminService;
@@ -21,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,6 +39,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 后台用户管理Service实现类
@@ -56,6 +60,8 @@ public class UmsAdminServiceImpl implements UmsAdminService {
     private UmsAdminRoleRelationDao adminRoleRelationDao;
     @Autowired
     private UmsAdminLoginLogMapper loginLogMapper;
+    @Value("${jwt.tenant-id}")
+    private String tenantId;
 
     @Override
     public UmsAdmin getAdminByUsername(String username) {
@@ -109,7 +115,13 @@ public class UmsAdminServiceImpl implements UmsAdminService {
             }
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            token = jwtTokenUtil.generateToken(userDetails);
+            UmsAdmin admin = getAdminByUsername(username);
+            token = jwtTokenUtil.generateToken(IdentityTokenClaims.of(
+                    String.valueOf(admin.getId()), admin.getUsername(), SubjectType.STAFF, tenantId,
+                    getRoleList(admin.getId()).stream().map(UmsRole::getName).collect(Collectors.toList()),
+                    getResourceList(admin.getId()).stream()
+                            .map(resource -> resource.getId() + ":" + resource.getName())
+                            .collect(Collectors.toList())));
 //            updateLoginTimeByUsername(username);
             insertLoginLog(username);
         } catch (AuthenticationException e) {
