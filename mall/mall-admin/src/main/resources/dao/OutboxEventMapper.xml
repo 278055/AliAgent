@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.macro.mall.event.OutboxEventMapper">
+  <insert id="insert" parameterType="com.macro.mall.event.OutboxEvent">
+    INSERT INTO outbox_event(event_id,event_type,event_version,occurred_at,tenant_id,trace_id,producer,payload,status,attempts,next_attempt_at)
+    VALUES(#{eventId},#{eventType},#{eventVersion},#{occurredAt},#{tenantId},#{traceId},#{producer},#{payload},#{status},#{attempts},#{nextAttemptAt})
+  </insert>
+  <select id="findDue" resultType="com.macro.mall.event.OutboxEvent">
+    SELECT * FROM outbox_event WHERE status IN ('PENDING','RETRY') AND next_attempt_at &lt;= #{now}
+    ORDER BY occurred_at LIMIT #{limit}
+  </select>
+  <update id="markPublished">UPDATE outbox_event SET status='PUBLISHED',published_at=#{publishedAt} WHERE event_id=#{eventId} AND status IN ('PENDING','RETRY')</update>
+  <update id="markFailed">UPDATE outbox_event SET status=#{status},attempts=#{attempts},next_attempt_at=#{nextAttemptAt},last_error=#{error} WHERE event_id=#{eventId} AND status IN ('PENDING','RETRY')</update>
+</mapper>
