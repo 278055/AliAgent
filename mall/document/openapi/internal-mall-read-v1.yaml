@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Mall Internal Read API
+  version: v1
+  description: |
+    集成请求：由 P2 集成会话将本文件审核后移入 contracts/openapi/。
+    所有端点仅限经网关注入可信上下文的内部调用，且必须同时携带有效服务 JWT 与完整用户身份快照。
+servers:
+  - url: /
+paths:
+  /api/v1/internal/mall/products/{productId}:
+    get:
+      summary: 查询商品只读视图
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+        - $ref: '#/components/parameters/ServiceAuthorization'
+        - $ref: '#/components/parameters/UserSnapshot'
+      responses:
+        '200': { $ref: '#/components/responses/ProductResponse' }
+        '401': { $ref: '#/components/responses/AuthenticationFailure' }
+  /api/v1/internal/mall/products/{productId}/stock:
+    get:
+      summary: 查询 SKU 可售库存
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+        - $ref: '#/components/parameters/ServiceAuthorization'
+        - $ref: '#/components/parameters/UserSnapshot'
+      responses:
+        '200': { $ref: '#/components/responses/StockResponse' }
+        '401': { $ref: '#/components/responses/AuthenticationFailure' }
+  /api/v1/internal/mall/orders/{orderId}:
+    get:
+      summary: 查询订单脱敏只读视图
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/ServiceAuthorization'
+        - $ref: '#/components/parameters/UserSnapshot'
+      responses:
+        '200': { $ref: '#/components/responses/OrderResponse' }
+        '401': { $ref: '#/components/responses/AuthenticationFailure' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+  /api/v1/internal/mall/orders/{orderId}/logistics:
+    get:
+      summary: 查询订单物流
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/ServiceAuthorization'
+        - $ref: '#/components/parameters/UserSnapshot'
+      responses:
+        '200': { $ref: '#/components/responses/LogisticsResponse' }
+        '401': { $ref: '#/components/responses/AuthenticationFailure' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+  /api/v1/internal/mall/orders/{orderId}/after-sale-eligibility:
+    get:
+      summary: 查询售后资格，不创建售后申请
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/ServiceAuthorization'
+        - $ref: '#/components/parameters/UserSnapshot'
+      responses:
+        '200': { $ref: '#/components/responses/AfterSaleResponse' }
+        '401': { $ref: '#/components/responses/AuthenticationFailure' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+components:
+  parameters:
+    ProductId: { name: productId, in: path, required: true, schema: { type: integer, format: int64 } }
+    OrderId: { name: orderId, in: path, required: true, schema: { type: integer, format: int64 } }
+    ServiceAuthorization: { name: X-Service-Authorization, in: header, required: true, schema: { type: string }, description: 短期服务 JWT，aud=mall，scope=mall.internal.read }
+    UserSnapshot: { name: X-Subject-Id, in: header, required: true, schema: { type: string }, description: 需同时提供 X-Tenant-Id、X-Subject-Type 与可选 X-User-Roles }
+  responses:
+    ProductResponse: { description: 脱敏商品视图 }
+    StockResponse: { description: SKU 可售库存视图 }
+    OrderResponse: { description: 不含支付、收件地址或联系方式的订单视图 }
+    LogisticsResponse: { description: 已授权订单的物流视图 }
+    AfterSaleResponse: { description: 售后资格只读判断 }
+    AuthenticationFailure: { description: 服务身份或用户身份快照缺失或无效 }
+    AccessDenied: { description: MEMBER 非订单归属或 STAFF 数据范围不足，错误码 MALL-403-001 }
