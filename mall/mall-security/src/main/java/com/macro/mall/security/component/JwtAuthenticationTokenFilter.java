@@ -1,12 +1,14 @@
 package com.macro.mall.security.component;
 
 import com.macro.mall.security.util.JwtTokenUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.macro.mall.security.identity.IdentityContext;
+import com.macro.mall.security.identity.IdentityContextHolder;
+import com.macro.mall.security.identity.SubjectType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import com.macro.mall.security.identity.IdentityTokenException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -23,7 +25,6 @@ import java.io.IOException;
  * Created by macro on 2018/4/26.
  */
 public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
-    private static final Logger LOGGER = LoggerFactory.getLogger(JwtAuthenticationTokenFilter.class);
     @Autowired
     private UserDetailsService userDetailsService;
     @Autowired
@@ -32,26 +33,42 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
     private String tokenHeader;
     @Value("${jwt.tokenHead}")
     private String tokenHead;
+    @Value("${jwt.subject-type}")
+    private SubjectType subjectType;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String authHeader = request.getHeader(this.tokenHeader);
-        if (authHeader != null && authHeader.startsWith(this.tokenHead)) {
-            String authToken = authHeader.substring(this.tokenHead.length());// The part after "Bearer "
-            String username = jwtTokenUtil.getUserNameFromToken(authToken);
-            LOGGER.info("checking username:{}", username);
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
-                if (jwtTokenUtil.validateToken(authToken, userDetails)) {
-                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    LOGGER.info("authenticated user:{}", username);
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+        try {
+            String authHeader = request.getHeader(this.tokenHeader);
+            if (authHeader != null && authHeader.startsWith(this.tokenHead)) {
+                String authToken = authHeader.substring(this.tokenHead.length());
+                IdentityContext identityContext;
+                try {
+                    identityContext = jwtTokenUtil.getIdentityContext(authToken);
+                } catch (IdentityTokenException e) {
+                    chain.doFilter(request, response);
+                    return;
+                }
+                String username = jwtTokenUtil.getUserNameFromToken(authToken);
+                if (identityContext.getSubjectType() != subjectType) {
+                    chain.doFilter(request, response);
+                    return;
+                }
+                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+                    if (jwtTokenUtil.validateToken(authToken, userDetails.getUsername())) {
+                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        IdentityContextHolder.setContext(identityContext);
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
                 }
             }
+            chain.doFilter(request, response);
+        } finally {
+            IdentityContextHolder.clear();
         }
-        chain.doFilter(request, response);
     }
 }
