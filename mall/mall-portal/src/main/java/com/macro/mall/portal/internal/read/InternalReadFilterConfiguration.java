@@ -1,7 +1,8 @@
 package com.macro.mall.portal.internal.read;
 
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -10,8 +11,8 @@ import org.springframework.core.Ordered;
 public class InternalReadFilterConfiguration {
     @Bean
     @ConditionalOnMissingBean(ServiceIdentityVerifier.class)
-    public ServiceIdentityVerifier serviceIdentityVerifier() {
-        return new RejectingServiceIdentityVerifier();
+    public ServiceIdentityVerifier serviceIdentityVerifier(@Value("${SERVICE_JWT_SECRET}") String secret) {
+        return new Hs256ServiceIdentityVerifier(secret);
     }
 
     @Bean
