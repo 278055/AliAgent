@@ -10,6 +10,8 @@ import com.macro.mall.dto.PmsProductResult;
 import com.macro.mall.mapper.*;
 import com.macro.mall.model.*;
 import com.macro.mall.service.PmsProductService;
+import com.macro.mall.event.DomainEventTypes;
+import com.macro.mall.event.OutboxEventService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,6 +66,8 @@ public class PmsProductServiceImpl implements PmsProductService {
     private PmsProductDao productDao;
     @Autowired
     private PmsProductVertifyRecordDao productVertifyRecordDao;
+    @Autowired
+    private OutboxEventService outboxEventService;
 
     @Override
     public int create(PmsProductParam productParam) {
@@ -91,6 +95,8 @@ public class PmsProductServiceImpl implements PmsProductService {
         //关联优选
         relateAndInsertList(prefrenceAreaProductRelationDao, productParam.getPrefrenceAreaProductRelationList(), productId);
         count = 1;
+        outboxEventService.publish(outboxEventService.create(DomainEventTypes.PRODUCT_CHANGED, "mall-default", "product-" + productId,
+                java.util.Map.of("productId", productId, "operation", "CREATED")));
         return count;
     }
 
@@ -157,6 +163,8 @@ public class PmsProductServiceImpl implements PmsProductService {
         prefrenceAreaProductRelationMapper.deleteByExample(prefrenceAreaExample);
         relateAndInsertList(prefrenceAreaProductRelationDao, productParam.getPrefrenceAreaProductRelationList(), id);
         count = 1;
+        outboxEventService.publish(outboxEventService.create(DomainEventTypes.PRODUCT_CHANGED, "mall-default", "product-" + id,
+                java.util.Map.of("productId", id, "operation", "UPDATED")));
         return count;
     }
 

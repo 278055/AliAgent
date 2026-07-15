@@ -10,6 +10,8 @@ import com.macro.mall.model.OmsOrder;
 import com.macro.mall.model.OmsOrderExample;
 import com.macro.mall.model.OmsOrderOperateHistory;
 import com.macro.mall.service.OmsOrderService;
+import com.macro.mall.event.DomainEventTypes;
+import com.macro.mall.event.OutboxEventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +33,8 @@ public class OmsOrderServiceImpl implements OmsOrderService {
     private OmsOrderOperateHistoryDao orderOperateHistoryDao;
     @Autowired
     private OmsOrderOperateHistoryMapper orderOperateHistoryMapper;
+    @Autowired
+    private OutboxEventService outboxEventService;
 
     @Override
     public List<OmsOrder> list(OmsOrderQueryParam queryParam, Integer pageSize, Integer pageNum) {
@@ -54,6 +58,8 @@ public class OmsOrderServiceImpl implements OmsOrderService {
                     return history;
                 }).collect(Collectors.toList());
         orderOperateHistoryDao.insertList(operateHistoryList);
+        deliveryParamList.forEach(item -> outboxEventService.publish(outboxEventService.create(DomainEventTypes.ORDER_DELIVERED,
+                "mall-default", "order-" + item.getOrderId(), java.util.Map.of("orderId", item.getOrderId(), "trackingNo", item.getDeliverySn()))));
         return count;
     }
 
