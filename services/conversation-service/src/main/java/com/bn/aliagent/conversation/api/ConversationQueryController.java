@@ -1,0 +1,7 @@
+package com.bn.aliagent.conversation.api;
+import com.bn.aliagent.conversation.core.*; import jakarta.servlet.http.HttpServletRequest; import java.util.*; import org.springframework.web.bind.annotation.*;
+@RestController @org.springframework.context.annotation.Profile("database") @RequestMapping("/api/v1/conversations") public class ConversationQueryController { private final ConversationService service; public ConversationQueryController(ConversationService service){this.service=service;}
+ @GetMapping public Map<String,Object> list(@RequestParam(defaultValue="1")int page,@RequestParam(required=false)Integer pageSize,HttpServletRequest r){int size=ConversationPolicy.requirePageSize(pageSize);var c=TrustedConversationRequestContext.from(r);return ok(Map.of("items",service.list(c,page,size),"page",page,"pageSize",size,"total",service.count(c)));}
+ @GetMapping("/{id}") public Map<String,Object> get(@PathVariable UUID id,HttpServletRequest r){return ok(service.get(TrustedConversationRequestContext.from(r),id));}
+ @GetMapping("/{id}/messages") public Map<String,Object> messages(@PathVariable UUID id,@RequestParam(defaultValue="0")long afterSequence,@RequestParam(required=false)Integer pageSize,HttpServletRequest r){return ok(Map.of("items",service.messages(TrustedConversationRequestContext.from(r),id,afterSequence,ConversationPolicy.requirePageSize(pageSize))));}
+ private Map<String,Object> ok(Object data){return Map.of("code",200,"message","","data",data);}}

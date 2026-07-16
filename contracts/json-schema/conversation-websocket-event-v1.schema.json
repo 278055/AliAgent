@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"会话 WebSocket 事件 v1","type":"object","required":["eventType","conversationId"],"properties":{"eventType":{"type":"string"},"conversationId":{"type":"string","format":"uuid"}},"additionalProperties":true}

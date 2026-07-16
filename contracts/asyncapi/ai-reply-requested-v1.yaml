@@ -27,5 +27,7 @@ components:
             properties:
               eventType:
                 const: AIReplyRequested
+              producer:
+                const: conversation-service
               payload:
                 $ref: ../json-schema/ai-reply-requested-v1.schema.json
