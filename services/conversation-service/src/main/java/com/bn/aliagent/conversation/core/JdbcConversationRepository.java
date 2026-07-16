@@ -85,6 +85,22 @@ public class JdbcConversationRepository implements ConversationRepository {
     }
 
     @Override
+    public Message appendAiStreamingMessage(Message value, UUID generationId) {
+        long sequence = jdbc.queryForObject("SELECT COALESCE(MAX(sequence), 0) + 1 FROM message WHERE tenant_id = ? AND conversation_id = ?", Long.class, value.tenantId(), value.conversationId());
+        Message saved = new Message(value.id(), value.tenantId(), value.conversationId(), sequence, value.senderType(), value.messageType(), value.visibility(), value.content(), value.status(), value.requestId(), value.metadata(), value.createdAt());
+        jdbc.update("INSERT INTO message (id, tenant_id, conversation_id, sequence, sender_type, message_type, visibility, content, status, request_id, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?)",
+                saved.id(), saved.tenantId(), saved.conversationId(), saved.sequence(), saved.senderType(), saved.messageType(), saved.visibility(), saved.content(), saved.status(), saved.requestId(), saved.metadata(), timestamp(saved.createdAt()), timestamp(saved.createdAt()));
+        jdbc.update("UPDATE conversation SET updated_at = ? WHERE id = ? AND tenant_id = ?", timestamp(saved.createdAt()), saved.conversationId(), saved.tenantId());
+        return saved;
+    }
+
+    @Override
+    public Optional<Message> findAiGeneration(String tenantId, UUID conversationId, UUID requestId) {
+        return jdbc.query("SELECT id, tenant_id, conversation_id, sequence, sender_type, message_type, visibility, content, status, request_id, metadata, created_at FROM message WHERE tenant_id = ? AND conversation_id = ? AND request_id = ? AND sender_type = 'AI'",
+                (rs, row) -> message(rs), tenantId, conversationId, requestId).stream().findFirst();
+    }
+
+    @Override
     public List<Message> listMessages(String tenantId, UUID conversationId, long afterSequence, int limit) {
         return jdbc.query("SELECT id, tenant_id, conversation_id, sequence, sender_type, message_type, visibility, content, status, request_id, metadata, created_at FROM message WHERE tenant_id = ? AND conversation_id = ? AND sequence > ? ORDER BY sequence LIMIT ?",
                 (rs, row) -> message(rs), tenantId, conversationId, afterSequence, limit);

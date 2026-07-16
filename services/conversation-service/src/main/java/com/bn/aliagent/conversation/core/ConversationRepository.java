@@ -18,6 +18,8 @@ public interface ConversationRepository {
     Optional<Message> findStaffMessage(String tenantId, String subjectId, UUID conversationId, UUID clientMessageId);
     Message appendUserMessage(Message value, String subjectId);
     Message appendStaffMessage(Message value, String subjectId, UUID clientMessageId);
+    Message appendAiStreamingMessage(Message value, UUID generationId);
+    Optional<Message> findAiGeneration(String tenantId, UUID conversationId, UUID requestId);
     List<Message> listMessages(String tenantId, UUID conversationId, long afterSequence, int limit);
     void enqueue(ReplyRequest value);
     List<ReplyRequest> pendingReplies(int limit);

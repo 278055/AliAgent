@@ -11,7 +11,7 @@ paths:
   /api/v1/conversations/{conversationId}/messages:
     get: {summary: 按序号补拉消息, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
     post:
-      summary: 提交用户消息并创建 AIReplyRequested Outbox
+      summary: 原子提交用户消息、AIReplyRequested Outbox 与公开 AI STREAMING 占位消息
       parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}, {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}]
       responses: {'200': {description: 成功}}
   /api/v1/conversations/{conversationId}/human-messages:

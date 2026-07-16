@@ -54,18 +54,34 @@ public class ConversationService {
 
     @Transactional
     public Message submit(TrustedConversationRequestContext context, UUID conversationId, String content, UUID requestId, String key) {
+        return submitWithGeneration(context, conversationId, content, requestId, key).userMessage();
+    }
+
+    @Transactional
+    public ConversationModels.Generation submitWithGeneration(TrustedConversationRequestContext context, UUID conversationId, String content, UUID requestId, String key) {
         ConversationPolicy.requireIdempotencyKey(requestId, key);
         Conversation conversation = owned(context, conversationId);
         if (!conversation.ownerSubjectId().equals(context.subjectId())) {
             throw new ConversationException("TENANT-403-001", "Conversation is not owned by the caller");
         }
-        return repository.findUserMessage(context.tenantId(), context.subjectId(), conversationId, requestId).orElseGet(() -> {
+        Message userMessage = repository.findUserMessage(context.tenantId(), context.subjectId(), conversationId, requestId).orElseGet(() -> {
             Message message = repository.appendUserMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
                     0, "USER", "TEXT", "PRIVATE", content, "SUBMITTED", requestId, "{}", Instant.now()), context.subjectId());
             repository.enqueue(new ReplyRequest(UUID.randomUUID(), context.tenantId(), conversationId, message.id(), requestId,
                     context.traceId(), Instant.now()));
             return message;
         });
+        Message aiMessage = repository.findAiGeneration(context.tenantId(), conversationId, requestId).orElseGet(() -> {
+            UUID generationId = UUID.randomUUID();
+            return repository.appendAiStreamingMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
+                    0, "AI", "TEXT", "PUBLIC", "", "STREAMING", requestId,
+                    "{\"generationId\":\"" + generationId + "\"}", Instant.now()), generationId);
+        });
+        return new ConversationModels.Generation(generationId(aiMessage), userMessage, aiMessage);
+    }
+
+    public java.util.Optional<Message> findGeneration(String tenantId, UUID conversationId, UUID requestId) {
+        return repository.findAiGeneration(tenantId, conversationId, requestId);
     }
 
     @Transactional
@@ -100,5 +116,12 @@ public class ConversationService {
     private Conversation owned(TrustedConversationRequestContext context, UUID id) {
         return repository.findConversation(id, context.tenantId())
                 .orElseThrow(() -> new ConversationException("TENANT-403-001", "Conversation is not accessible"));
+    }
+
+    private UUID generationId(Message message) {
+        String marker = "\"generationId\":\"";
+        int start = message.metadata().indexOf(marker);
+        int valueStart = start + marker.length();
+        return UUID.fromString(message.metadata().substring(valueStart, message.metadata().indexOf('"', valueStart)));
     }
 }
