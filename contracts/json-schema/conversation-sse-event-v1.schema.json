@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "conversation-sse-event-v1",
+  "type": "object",
+  "required": ["eventType", "tenantId", "conversationId", "messageId", "sequence", "requestId", "occurredAt"],
+  "properties": {
+    "eventType": {"enum": ["message.delta", "message.completed", "message.interrupted", "stream.heartbeat", "error"]},
+    "tenantId": {"type": "string"},
+    "conversationId": {"type": "string", "format": "uuid"},
+    "messageId": {"type": "string", "format": "uuid"},
+    "sequence": {"type": "integer", "minimum": 0},
+    "requestId": {"type": "string", "format": "uuid"},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "delta": {"type": "string"},
+    "chunkIndex": {"type": "integer", "minimum": 0},
+    "status": {"enum": ["COMPLETED", "INTERRUPTED"]}
+  },
+  "allOf": [
+    {"if": {"properties": {"eventType": {"const": "message.delta"}}}, "then": {"required": ["delta", "chunkIndex"]}},
+    {"if": {"properties": {"eventType": {"enum": ["message.completed", "message.interrupted"]}}}, "then": {"required": ["status"]}}
+  ],
+  "additionalProperties": false
+}

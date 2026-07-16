@@ -1,0 +1,16 @@
+asyncapi: 3.0.0
+info:
+  title: AliAgent Conversation SSE Events
+  version: 1.0.0
+channels:
+  conversation.sse.v1:
+    address: /api/v1/conversations/{conversationId}/stream
+    messages:
+      ConversationSseEvent:
+        $ref: '#/components/messages/ConversationSseEvent'
+components:
+  messages:
+    ConversationSseEvent:
+      contentType: application/json
+      payload:
+        $ref: ../json-schema/conversation-sse-event-v1.schema.json
