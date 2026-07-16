@@ -9,4 +9,5 @@ public final class ConversationApi {
     public record CreateConversation(String title) { }
     public record PatchConversation(String title, Boolean pinned, Boolean closed) { }
     public record SubmitMessage(String content, UUID requestId) { }
+    public record SubmitStaffMessage(String content, UUID clientMessageId) { }
 }

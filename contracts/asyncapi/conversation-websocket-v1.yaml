@@ -1,12 +1,15 @@
 asyncapi: 3.0.0
 info: {title: AliAgent Conversation WebSocket Events, version: 1.0.0}
 channels:
-  conversation.websocket.v1:
-    address: conversation.websocket.v1
+  /api/v1/ws/conversations:
+    address: /api/v1/ws/conversations
     messages:
-      ConversationEvent: {$ref: '#/components/messages/ConversationEvent'}
+      ConversationWebSocketEvent: {$ref: '#/components/messages/ConversationWebSocketEvent'}
+operations:
+  receiveHumanSend: {action: receive, channel: {$ref: '#/channels/~1api~1v1~1ws~1conversations'}, messages: [{$ref: '#/channels/~1api~1v1~1ws~1conversations/messages/ConversationWebSocketEvent'}]}
+  sendConversationEvent: {action: send, channel: {$ref: '#/channels/~1api~1v1~1ws~1conversations'}, messages: [{$ref: '#/channels/~1api~1v1~1ws~1conversations/messages/ConversationWebSocketEvent'}]}
 components:
   messages:
-    ConversationEvent:
+    ConversationWebSocketEvent:
       contentType: application/json
       payload: {$ref: ../json-schema/conversation-websocket-event-v1.schema.json}
