@@ -4,7 +4,7 @@ paths:
   /api/v1/knowledge/documents:
     post:
       summary: 上传文件并创建异步摄入任务
-      parameters: [{$ref: '#/components/parameters/Tenant'}, {$ref: '#/components/parameters/Subject'}, {$ref: '#/components/parameters/Trace'}]
+      parameters: [{$ref: '#/components/parameters/Tenant'}, {$ref: '#/components/parameters/Subject'}, {$ref: '#/components/parameters/Trace'}, {$ref: '#/components/parameters/SubjectType'}, {$ref: '#/components/parameters/Roles'}, {$ref: '#/components/parameters/Permissions'}, {$ref: '#/components/parameters/AuthorizationSnapshot'}]
       requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [file], properties: {file: {type: string, format: binary}}}}}}
       responses: {'202': {description: 已接受}}
   /api/v1/knowledge/ingestion-tasks/{taskId}:
@@ -20,7 +20,7 @@ paths:
   /api/v1/knowledge/retrieval:query:
     post:
       summary: P3-B 检索契约，仅定义不在 P3-A 实现
-      parameters: [{$ref: '#/components/parameters/Tenant'}]
+      parameters: [{$ref: '#/components/parameters/Tenant'}, {$ref: '#/components/parameters/Subject'}, {$ref: '#/components/parameters/SubjectType'}, {$ref: '#/components/parameters/Roles'}, {$ref: '#/components/parameters/Permissions'}, {$ref: '#/components/parameters/AuthorizationSnapshot'}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RetrievalRequest'}}}}
       responses: {'200': {description: 已发布版本的检索结果, content: {application/json: {schema: {$ref: '#/components/schemas/RetrievalResponse'}}}}}
 components:
@@ -28,6 +28,10 @@ components:
     Tenant: {name: X-Tenant-Id, in: header, required: true, schema: {type: string}}
     Subject: {name: X-Subject-Id, in: header, required: true, schema: {type: string}}
     Trace: {name: X-Trace-Id, in: header, required: true, schema: {type: string}}
+    SubjectType: {name: X-Subject-Type, in: header, required: true, schema: {type: string, enum: [MEMBER, STAFF]}}
+    Roles: {name: X-User-Roles, in: header, required: true, schema: {type: string}}
+    Permissions: {name: X-User-Permissions, in: header, required: true, schema: {type: string}}
+    AuthorizationSnapshot: {name: X-Authorization-Snapshot-Id, in: header, required: true, schema: {type: string, format: uuid}}
   schemas:
     RetrievalRequest:
       type: object

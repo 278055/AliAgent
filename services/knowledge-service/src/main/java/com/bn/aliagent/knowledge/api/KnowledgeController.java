@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.annotation.Profile;
@@ -44,8 +45,9 @@ public class KnowledgeController {
     @PostMapping(path = "/documents", consumes = "multipart/form-data")
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Transactional
-    public Map<String, Object> upload(@RequestHeader("X-Tenant-Id") String tenantId, @RequestHeader("X-Subject-Id") String subjectId,
-            @RequestHeader("X-Trace-Id") String traceId, @RequestPart("file") MultipartFile file) throws Exception {
+    public Map<String, Object> upload(HttpServletRequest request, @RequestPart("file") MultipartFile file) throws Exception {
+        TrustedKnowledgeRequestContext context = TrustedKnowledgeRequestContext.require(request);
+        String tenantId = context.tenantId(), subjectId = context.subjectId(), traceId = context.traceId();
         UUID documentId = UUID.randomUUID(), versionId = UUID.randomUUID(), taskId = UUID.randomUUID(), eventId = UUID.randomUUID();
         String key = objectKeys.create(tenantId, file.getOriginalFilename());
         storage.put(key, file.getInputStream(), file.getSize(), file.getContentType());
@@ -60,7 +62,8 @@ public class KnowledgeController {
     }
 
     @GetMapping("/ingestion-tasks/{taskId}")
-    public Map<String, Object> task(@RequestHeader("X-Tenant-Id") String tenantId, @PathVariable UUID taskId) {
+    public Map<String, Object> task(HttpServletRequest request, @PathVariable UUID taskId) {
+        String tenantId = TrustedKnowledgeRequestContext.require(request).tenantId();
         try {
             Map<String, Object> task = jdbc.queryForMap("SELECT id, state, failure_diagnostic, created_at, updated_at FROM ingestion_task WHERE id = ? AND tenant_id = ?", taskId, tenantId);
             return Map.of("code", 200, "message", "", "data", task);
@@ -70,7 +73,8 @@ public class KnowledgeController {
     }
 
     @PostMapping("/versions/{versionId}/publish")
-    public Map<String, Object> publish(@RequestHeader("X-Tenant-Id") String tenantId, @PathVariable UUID versionId) {
+    public Map<String, Object> publish(HttpServletRequest request, @PathVariable UUID versionId) {
+        String tenantId = TrustedKnowledgeRequestContext.require(request).tenantId();
         catalog.publish(versionId, tenantId);
         return Map.of("code", 200, "message", "", "data", Map.of("versionId", versionId, "state", "PUBLISHED"));
     }

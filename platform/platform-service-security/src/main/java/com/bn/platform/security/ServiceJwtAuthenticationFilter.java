@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 public final class ServiceJwtAuthenticationFilter extends OncePerRequestFilter {
+    public static final String VERIFIED_ATTRIBUTE = ServiceJwtAuthenticationFilter.class.getName() + ".verified";
     private final ServiceJwtSupport jwtSupport;
     private final String serviceName;
 
@@ -28,6 +29,7 @@ public final class ServiceJwtAuthenticationFilter extends OncePerRequestFilter {
             String authorization = request.getHeader("X-Service-Authorization");
             if (authorization == null || !authorization.startsWith("Bearer ")) throw new IllegalArgumentException("Missing service JWT");
             jwtSupport.verify(authorization.substring(7), serviceName, request.getMethod() + ":" + request.getRequestURI());
+            request.setAttribute(VERIFIED_ATTRIBUTE, Boolean.TRUE);
             chain.doFilter(request, response);
         } catch (Exception exception) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
