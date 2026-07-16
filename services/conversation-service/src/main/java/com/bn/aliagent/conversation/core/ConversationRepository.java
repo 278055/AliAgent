@@ -15,7 +15,9 @@ public interface ConversationRepository {
     Conversation update(Conversation value);
     void softDelete(UUID id, String tenantId);
     Optional<Message> findUserMessage(String tenantId, String subjectId, UUID conversationId, UUID requestId);
+    Optional<Message> findStaffMessage(String tenantId, String subjectId, UUID conversationId, UUID clientMessageId);
     Message appendUserMessage(Message value, String subjectId);
+    Message appendStaffMessage(Message value, String subjectId, UUID clientMessageId);
     List<Message> listMessages(String tenantId, UUID conversationId, long afterSequence, int limit);
     void enqueue(ReplyRequest value);
     List<ReplyRequest> pendingReplies(int limit);

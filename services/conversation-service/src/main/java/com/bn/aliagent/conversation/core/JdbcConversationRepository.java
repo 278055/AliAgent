@@ -59,11 +59,27 @@ public class JdbcConversationRepository implements ConversationRepository {
     }
 
     @Override
+    public Optional<Message> findStaffMessage(String tenantId, String subjectId, UUID conversationId, UUID clientMessageId) {
+        return jdbc.query("SELECT id, tenant_id, conversation_id, sequence, sender_type, message_type, visibility, content, status, request_id, metadata, created_at FROM message WHERE tenant_id = ? AND sender_subject_id = ? AND conversation_id = ? AND client_message_id = ?",
+                (rs, row) -> message(rs), tenantId, subjectId, conversationId, clientMessageId).stream().findFirst();
+    }
+
+    @Override
     public Message appendUserMessage(Message value, String subjectId) {
         long sequence = jdbc.queryForObject("SELECT COALESCE(MAX(sequence), 0) + 1 FROM message WHERE tenant_id = ? AND conversation_id = ?", Long.class, value.tenantId(), value.conversationId());
         Message saved = new Message(value.id(), value.tenantId(), value.conversationId(), sequence, value.senderType(), value.messageType(), value.visibility(), value.content(), value.status(), value.requestId(), value.metadata(), value.createdAt());
         jdbc.update("INSERT INTO message (id, tenant_id, conversation_id, sequence, sender_type, sender_subject_id, message_type, visibility, content, status, request_id, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?)",
                 saved.id(), saved.tenantId(), saved.conversationId(), saved.sequence(), saved.senderType(), subjectId, saved.messageType(), saved.visibility(), saved.content(), saved.status(), saved.requestId(), saved.metadata(), timestamp(saved.createdAt()), timestamp(saved.createdAt()));
+        jdbc.update("UPDATE conversation SET updated_at = ? WHERE id = ? AND tenant_id = ?", timestamp(saved.createdAt()), saved.conversationId(), saved.tenantId());
+        return saved;
+    }
+
+    @Override
+    public Message appendStaffMessage(Message value, String subjectId, UUID clientMessageId) {
+        long sequence = jdbc.queryForObject("SELECT COALESCE(MAX(sequence), 0) + 1 FROM message WHERE tenant_id = ? AND conversation_id = ?", Long.class, value.tenantId(), value.conversationId());
+        Message saved = new Message(value.id(), value.tenantId(), value.conversationId(), sequence, value.senderType(), value.messageType(), value.visibility(), value.content(), value.status(), value.requestId(), value.metadata(), value.createdAt());
+        jdbc.update("INSERT INTO message (id, tenant_id, conversation_id, sequence, sender_type, sender_subject_id, message_type, visibility, content, status, request_id, client_message_id, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?)",
+                saved.id(), saved.tenantId(), saved.conversationId(), saved.sequence(), saved.senderType(), subjectId, saved.messageType(), saved.visibility(), saved.content(), saved.status(), saved.requestId(), clientMessageId, saved.metadata(), timestamp(saved.createdAt()), timestamp(saved.createdAt()));
         jdbc.update("UPDATE conversation SET updated_at = ? WHERE id = ? AND tenant_id = ?", timestamp(saved.createdAt()), saved.conversationId(), saved.tenantId());
         return saved;
     }

@@ -19,7 +19,7 @@ class ConversationServiceTest {
         UUID requestId = UUID.randomUUID();
         InMemoryRepository repository = new InMemoryRepository(conversationId);
         ConversationService service = new ConversationService(repository);
-        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-subject", UUID.randomUUID().toString(), UUID.randomUUID());
+        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-subject", "MEMBER", UUID.randomUUID().toString(), UUID.randomUUID());
 
         Message first = service.submit(context, conversationId, "test-p4-a-message", requestId, requestId.toString());
         Message replay = service.submit(context, conversationId, "test-p4-a-message", requestId, requestId.toString());
@@ -27,6 +27,22 @@ class ConversationServiceTest {
         assertEquals(first.id(), replay.id());
         assertEquals(1, repository.messages.size());
         assertEquals(1, repository.outbox.size());
+    }
+
+    @Test
+    void duplicateStaffClientMessageIdReturnsThePersistedHumanMessage() {
+        UUID conversationId = UUID.randomUUID();
+        UUID clientMessageId = UUID.randomUUID();
+        InMemoryRepository repository = new InMemoryRepository(conversationId);
+        ConversationService service = new ConversationService(repository);
+        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-staff", "STAFF", UUID.randomUUID().toString(), UUID.randomUUID());
+
+        Message first = service.submitStaffMessage(context, conversationId, "test-p4-a-human", clientMessageId);
+        Message replay = service.submitStaffMessage(context, conversationId, "test-p4-a-human", clientMessageId);
+
+        assertEquals(first.id(), replay.id());
+        assertEquals(1, repository.messages.size());
+        assertEquals(1, first.sequence());
     }
 
     private static final class InMemoryRepository implements ConversationRepository {
@@ -41,7 +57,9 @@ class ConversationServiceTest {
         public Conversation update(Conversation value) { return value; }
         public void softDelete(UUID id, String tenant) { }
         public Optional<Message> findUserMessage(String tenant, String subject, UUID conversation, UUID request) { return messages.stream().filter(item -> item.requestId().equals(request)).findFirst(); }
+        public Optional<Message> findStaffMessage(String tenant, String subject, UUID conversation, UUID clientMessageId) { return messages.stream().filter(item -> item.senderType().equals("STAFF") && item.requestId() == null).findFirst(); }
         public Message appendUserMessage(Message value, String subject) { Message saved = new Message(value.id(), value.tenantId(), value.conversationId(), messages.size() + 1L, value.senderType(), value.messageType(), value.visibility(), value.content(), value.status(), value.requestId(), value.metadata(), value.createdAt()); messages.add(saved); return saved; }
+        public Message appendStaffMessage(Message value, String subject, UUID clientMessageId) { return appendUserMessage(value, subject); }
         public List<Message> listMessages(String tenant, UUID conversation, long after, int limit) { return List.of(); }
         public void enqueue(ReplyRequest value) { outbox.add(value); }
         public List<ReplyRequest> pendingReplies(int limit) { return List.of(); }

@@ -68,6 +68,35 @@ public class ConversationService {
         });
     }
 
+    @Transactional
+    public Message submitStaffMessage(TrustedConversationRequestContext context, UUID conversationId, String content, UUID clientMessageId) {
+        ConversationPolicy.requireStaff(context.subjectType());
+        ConversationPolicy.requireClientMessageId(clientMessageId);
+        if (content == null || content.isBlank()) throw new ConversationException("CONV-400-002", "content is required");
+        owned(context, conversationId);
+        return repository.findStaffMessage(context.tenantId(), context.subjectId(), conversationId, clientMessageId).orElseGet(() ->
+                repository.appendStaffMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId, 0,
+                        "STAFF", "TEXT", "PUBLIC", content, "COMPLETED", null, "{}", Instant.now()), context.subjectId(), clientMessageId));
+    }
+
+    @Transactional
+    public Conversation takeOver(TrustedConversationRequestContext context, UUID conversationId) {
+        ConversationPolicy.requireStaff(context.subjectType());
+        return transition(context, conversationId, "HUMAN_ACTIVE");
+    }
+
+    @Transactional
+    public Conversation release(TrustedConversationRequestContext context, UUID conversationId) {
+        ConversationPolicy.requireStaff(context.subjectType());
+        return transition(context, conversationId, "AI_ACTIVE");
+    }
+
+    private Conversation transition(TrustedConversationRequestContext context, UUID conversationId, String status) {
+        Conversation current = owned(context, conversationId);
+        return repository.update(new Conversation(current.id(), current.tenantId(), current.ownerSubjectId(), current.title(),
+                status, current.pinned(), current.createdAt(), Instant.now()));
+    }
+
     private Conversation owned(TrustedConversationRequestContext context, UUID id) {
         return repository.findConversation(id, context.tenantId())
                 .orElseThrow(() -> new ConversationException("TENANT-403-001", "Conversation is not accessible"));

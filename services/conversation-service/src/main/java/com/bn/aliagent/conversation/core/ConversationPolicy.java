@@ -18,4 +18,18 @@ public final class ConversationPolicy {
         }
         return value;
     }
+
+    public static String requireStaff(String subjectType) {
+        if (!"STAFF".equals(subjectType)) {
+            throw new ConversationException("AUTH-403-001", "Staff identity is required");
+        }
+        return subjectType;
+    }
+
+    public static UUID requireClientMessageId(UUID clientMessageId) {
+        if (clientMessageId == null) {
+            throw new ConversationException("CONV-400-005", "clientMessageId is required");
+        }
+        return clientMessageId;
+    }
 }

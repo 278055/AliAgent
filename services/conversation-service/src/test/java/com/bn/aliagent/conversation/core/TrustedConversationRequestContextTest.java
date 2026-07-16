@@ -27,6 +27,7 @@ class TrustedConversationRequestContextTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Tenant-Id", "test-tenant");
         request.addHeader("X-Subject-Id", "test-subject");
+        request.addHeader("X-Subject-Type", "MEMBER");
         request.addHeader("X-Trace-Id", UUID.randomUUID().toString());
         request.addHeader("X-Request-Id", UUID.randomUUID().toString());
         return request;
