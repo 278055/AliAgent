@@ -10,3 +10,8 @@ spring:
     password: ${CONVERSATION_DB_PASSWORD}
   flyway:
     enabled: true
+  rabbitmq:
+    host: ${CONVERSATION_RABBITMQ_HOST:localhost}
+    port: ${CONVERSATION_RABBITMQ_PORT:5672}
+    username: ${CONVERSATION_RABBITMQ_USERNAME:guest}
+    password: ${CONVERSATION_RABBITMQ_PASSWORD:guest}

@@ -18,3 +18,9 @@ nacos:
 logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} service=conversation-service]"
+conversation:
+  outbox:
+    dispatch-delay: ${CONVERSATION_OUTBOX_DISPATCH_DELAY:5000}
+  remote-write: ${FEATURE_CONVERSATION_REMOTE_WRITE:false}
+  orchestration:
+    remote-reply: ${FEATURE_ORCHESTRATION_REMOTE_REPLY:false}
