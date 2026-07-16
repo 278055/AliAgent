@@ -1,8 +1,8 @@
 package com.bn.aliagent.conversation.streaming;
 
 import com.bn.aliagent.conversation.core.ConversationException;
+import com.bn.aliagent.conversation.core.ConversationService;
 import com.bn.aliagent.conversation.core.ConversationModels.Message;
-import com.bn.aliagent.conversation.core.ConversationRepository;
 import com.bn.aliagent.conversation.core.TrustedConversationRequestContext;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
@@ -15,15 +15,15 @@ import static com.bn.aliagent.conversation.streaming.StreamingModels.StreamChunk
 import static com.bn.aliagent.conversation.streaming.StreamingModels.StreamEvent;
 
 public class StreamingService {
-    private final ConversationRepository conversations;
+    private final ConversationService conversations;
     private final StreamingRepository generations;
     private final DraftStore drafts;
     private final SseEventHub events;
 
-    public StreamingService(ConversationRepository conversations, StreamingRepository generations, DraftStore drafts) {
+    public StreamingService(ConversationService conversations, StreamingRepository generations, DraftStore drafts) {
         this(conversations, generations, drafts, new SseEventHub());
     }
-    public StreamingService(ConversationRepository conversations, StreamingRepository generations, DraftStore drafts, SseEventHub events) {
+    public StreamingService(ConversationService conversations, StreamingRepository generations, DraftStore drafts, SseEventHub events) {
         this.conversations = conversations;
         this.generations = generations;
         this.drafts = drafts;
@@ -35,7 +35,7 @@ public class StreamingService {
 
     public void acceptChunk(TrustedConversationRequestContext context, UUID conversationId, UUID generationId, StreamChunk chunk) {
         validate(chunk);
-        Message message = publicAiMessage(context, conversationId, chunk.messageId());
+        Message message = publicAiMessage(context, conversationId, generationId, chunk.messageId());
         Generation generation = generations.find(context.tenantId(), conversationId, generationId).orElseGet(() ->
                 generations.findByMessage(context.tenantId(), conversationId, chunk.messageId()).orElseGet(() ->
                         new Generation(generationId, context.tenantId(), conversationId, chunk.messageId(), context.requestId(),
@@ -61,9 +61,7 @@ public class StreamingService {
 
     public List<StreamEvent> replay(TrustedConversationRequestContext context, UUID conversationId, long afterSequence) {
         if (afterSequence < 0) throw new ConversationException("CONV-400-003", "afterSequence must not be negative");
-        if (conversations.listMessages(context.tenantId(), conversationId, 0, 1).isEmpty()) {
-            throw new ConversationException("TENANT-403-001", "Conversation is not accessible");
-        }
+        conversations.messages(context, conversationId, 0, 1);
         return generations.terminalAfter(context.tenantId(), conversationId, afterSequence).stream().map(this::terminalEvent).toList();
     }
 
@@ -79,10 +77,22 @@ public class StreamingService {
                 .orElseThrow(() -> new ConversationException("CONV-404-001", "Generation does not exist"));
     }
 
-    private Message publicAiMessage(TrustedConversationRequestContext context, UUID conversationId, UUID messageId) {
-        return conversations.listMessages(context.tenantId(), conversationId, 0, 100).stream()
-                .filter(value -> value.id().equals(messageId) && "AI".equals(value.senderType()) && "PUBLIC".equals(value.visibility()))
-                .findFirst().orElseThrow(() -> new ConversationException("TENANT-403-001", "Message is not accessible"));
+    private Message publicAiMessage(TrustedConversationRequestContext context, UUID conversationId, UUID generationId, UUID messageId) {
+        Message message = conversations.findGeneration(context.tenantId(), conversationId, context.requestId())
+                .orElseThrow(() -> new ConversationException("TENANT-403-001", "Generation is not accessible"));
+        if (!message.id().equals(messageId) || !"AI".equals(message.senderType()) || !"PUBLIC".equals(message.visibility())
+                || !"STREAMING".equals(message.status()) || !generationId.equals(generationId(message))) {
+            throw new ConversationException("CONV-409-001", "Generation does not match the persisted AI message");
+        }
+        return message;
+    }
+
+    private UUID generationId(Message message) {
+        String marker = "\"generationId\":\"";
+        int valueStart = message.metadata().indexOf(marker) + marker.length();
+        if (valueStart < marker.length()) throw new ConversationException("CONV-409-001", "Generation metadata is invalid");
+        try { return UUID.fromString(message.metadata().substring(valueStart, message.metadata().indexOf('"', valueStart))); }
+        catch (IllegalArgumentException | IndexOutOfBoundsException exception) { throw new ConversationException("CONV-409-001", "Generation metadata is invalid"); }
     }
 
     private String checkpoint(Generation generation) {
