@@ -10,3 +10,14 @@ spring:
     password: ${KNOWLEDGE_DB_PASSWORD}
   flyway:
     enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:15692}
+    username: ${RABBITMQ_DEFAULT_USER:aliagent}
+    password: ${RABBITMQ_DEFAULT_PASS:}
+knowledge:
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:19000}
+    access-key: ${MINIO_ROOT_USER:aliagent}
+    secret-key: ${MINIO_ROOT_PASSWORD:}
+    bucket: ${KNOWLEDGE_MINIO_BUCKET:knowledge}

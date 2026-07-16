@@ -1,0 +1,29 @@
+asyncapi: 3.0.0
+info: {title: Knowledge Ingestion Requested, version: 1.0.0}
+channels:
+  knowledge.ingestion.v1:
+    address: knowledge.ingestion.v1
+    messages:
+      IngestionRequested:
+        $ref: '#/components/messages/IngestionRequested'
+operations:
+  publishIngestionRequested:
+    action: send
+    channel:
+      $ref: '#/channels/knowledge.ingestion.v1'
+    messages:
+      - $ref: '#/channels/knowledge.ingestion.v1/messages/IngestionRequested'
+components:
+  messages:
+    IngestionRequested:
+      name: IngestionRequested
+      contentType: application/json
+      payload:
+        allOf:
+          - $ref: ../json-schema/event-envelope-v1.schema.json
+          - type: object
+            properties:
+              eventType: {const: KnowledgeIngestionRequested}
+              producer: {const: knowledge-service}
+              payload:
+                $ref: ../json-schema/knowledge-ingestion-requested-v1.schema.json

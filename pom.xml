@@ -21,6 +21,7 @@
         <module>services/knowledge-service</module>
         <module>services/evaluation-service</module>
         <module>services/insight-service</module>
+        <module>legacy-monolith</module>
     </modules>
 
     <properties>
@@ -34,6 +35,9 @@
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <minio.version>8.4.5</minio.version>
+        <tika.version>3.2.3</tika.version>
+        <pgvector.version>0.1.6</pgvector.version>
     </properties>
 
     <dependencyManagement>
@@ -49,6 +53,26 @@
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-api</artifactId>
                 <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-parsers-standard-package</artifactId>
+                <version>${tika.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-core</artifactId>
+                <version>${tika.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pgvector</groupId>
+                <artifactId>pgvector</artifactId>
+                <version>${pgvector.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>

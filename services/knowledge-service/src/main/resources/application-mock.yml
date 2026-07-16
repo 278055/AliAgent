@@ -1,0 +1,4 @@
+spring:
+  ai:
+    dashscope:
+      enabled: false

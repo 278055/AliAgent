@@ -52,3 +52,14 @@ mybatis-plus:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
+
+# 远程读取默认关闭；仅白名单租户在网关注入可信上下文后可以启用。
+feature:
+  knowledge:
+    remote-read: false
+    remote-read-tenants: ""
+    remote-read-dual-run: false
+
+knowledge-service:
+  base-url: ${KNOWLEDGE_SERVICE_BASE_URL:http://localhost:8084}
+  remote-read-timeout: ${KNOWLEDGE_SERVICE_REMOTE_READ_TIMEOUT:2s}
