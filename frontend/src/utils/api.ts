@@ -62,6 +62,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  // 由服务端可信租户开关决定；前端不保存或设置 tenantId。
+  remoteWriteEnabled() {
+    return request<{ enabled: boolean }>('/chat/remote-write-enabled')
+  },
   // Auth
   login(usernameOrEmail: string, password: string, persist: boolean) {
     return request<{ token: string; userId: string }>('/auth/login', {

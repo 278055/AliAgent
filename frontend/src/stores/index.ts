@@ -151,6 +151,10 @@ async function sendMessage(message: string) {
   state.isLoading = true
   state.streamingContent = ''
 
+  // 远程写入启用前仍使用旧单体路径，确保任意异常均可回退。
+  const remoteWrite = await api.remoteWriteEnabled().catch(() => ({ enabled: false }))
+  if (remoteWrite.enabled) addToast('远程会话写入已启用，当前版本仍通过兼容流式链路展示回复', 'info')
+
   const userMsg: Message = {
     id: `local-user-${Date.now()}`,
     conversationId: state.currentConversationId || '',
