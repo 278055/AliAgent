@@ -6,6 +6,7 @@ import com.bn.aliagent.knowledge.ingestion.IngestionTaskMessage;
 import com.bn.aliagent.knowledge.storage.KnowledgeObjectStorage;
 import com.bn.aliagent.knowledge.storage.ObjectKeyFactory;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
@@ -54,7 +55,9 @@ public class KnowledgeController {
         jdbc.update("INSERT INTO knowledge_document (id, tenant_id, object_key, original_filename, media_type, content_length, checksum_sha256, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", documentId, tenantId, key, file.getOriginalFilename(), file.getContentType(), file.getSize(), sha256(file.getBytes()), subjectId);
         jdbc.update("INSERT INTO knowledge_version (id, tenant_id, document_id, version_number, state, created_by) VALUES (?, ?, ?, 1, 'PROCESSING', ?)", versionId, tenantId, documentId, subjectId);
         jdbc.update("INSERT INTO ingestion_task (id, tenant_id, version_id, state, event_id, trace_id) VALUES (?, ?, ?, 'PENDING', ?, ?)", taskId, tenantId, versionId, eventId, traceId);
-        IngestionTaskMessage message = new IngestionTaskMessage(eventId.toString(), 1, tenantId, traceId, taskId.toString());
+        IngestionTaskMessage message = new IngestionTaskMessage(eventId.toString(), IngestionTaskMessage.EVENT_TYPE, 1,
+                Instant.now().toString(), tenantId, traceId, IngestionTaskMessage.PRODUCER,
+                new IngestionTaskMessage.IngestionPayload(taskId.toString()));
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCommit() { rabbit.convertAndSend(IngestionInfrastructureConfiguration.QUEUE, message); }
         });
@@ -62,7 +65,7 @@ public class KnowledgeController {
     }
 
     @GetMapping("/ingestion-tasks/{taskId}")
-    public Map<String, Object> task(HttpServletRequest request, @PathVariable UUID taskId) {
+    public Map<String, Object> task(HttpServletRequest request, @PathVariable("taskId") UUID taskId) {
         String tenantId = TrustedKnowledgeRequestContext.require(request).tenantId();
         try {
             Map<String, Object> task = jdbc.queryForMap("SELECT id, state, failure_diagnostic, created_at, updated_at FROM ingestion_task WHERE id = ? AND tenant_id = ?", taskId, tenantId);
@@ -73,7 +76,7 @@ public class KnowledgeController {
     }
 
     @PostMapping("/versions/{versionId}/publish")
-    public Map<String, Object> publish(HttpServletRequest request, @PathVariable UUID versionId) {
+    public Map<String, Object> publish(HttpServletRequest request, @PathVariable("versionId") UUID versionId) {
         String tenantId = TrustedKnowledgeRequestContext.require(request).tenantId();
         catalog.publish(versionId, tenantId);
         return Map.of("code", 200, "message", "", "data", Map.of("versionId", versionId, "state", "PUBLISHED"));

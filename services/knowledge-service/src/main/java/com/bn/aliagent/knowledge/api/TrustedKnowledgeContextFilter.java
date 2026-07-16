@@ -6,14 +6,22 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import com.bn.platform.security.ServiceJwtAuthenticationFilter;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 1)
-public class TrustedKnowledgeContextFilter extends OncePerRequestFilter {
+@Configuration
+class TrustedKnowledgeContextFilterConfiguration {
+    @Bean
+    FilterRegistrationBean<TrustedKnowledgeContextFilter> trustedKnowledgeContextFilterRegistration() {
+        FilterRegistrationBean<TrustedKnowledgeContextFilter> registration = new FilterRegistrationBean<>(new TrustedKnowledgeContextFilter());
+        registration.setOrder(2);
+        return registration;
+    }
+}
+
+class TrustedKnowledgeContextFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return "/api/v1/health".equals(request.getRequestURI());

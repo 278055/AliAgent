@@ -1,8 +1,10 @@
 package com.bn.aliagent.knowledge.ingestion;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +13,7 @@ class IngestionProcessorTest {
     void 重复事件只处理一次() {
         FakeGateway gateway = new FakeGateway();
         IngestionProcessor processor = new IngestionProcessor(gateway, task -> "一段可解析文本", text -> List.of(text), text -> new float[1024]);
-        IngestionTaskMessage message = new IngestionTaskMessage("event-1", 1, "tenant-a", "trace-1", "task-1");
+        IngestionTaskMessage message = message("event-1", "task-1");
 
         processor.process(message);
         processor.process(message);
@@ -25,11 +27,26 @@ class IngestionProcessorTest {
         FakeGateway gateway = new FakeGateway();
         IngestionProcessor processor = new IngestionProcessor(gateway, task -> { throw new IllegalStateException("损坏文件"); }, text -> List.of(text), text -> new float[1024]);
 
-        processor.process(new IngestionTaskMessage("event-2", 1, "tenant-a", "trace-2", "task-2"));
+        processor.process(message("event-2", "task-2"));
 
         assertEquals(1, gateway.failedCount);
         assertEquals("损坏文件", gateway.failureReason);
         assertEquals(0, gateway.readyCount);
+    }
+
+    @Test
+    void 消息必须使用固定事件类型和生产者() {
+        assertThrows(IllegalArgumentException.class, () -> new IngestionTaskMessage("event-3", "OtherEvent", 1,
+                Instant.now().toString(), "tenant-a", "trace-1", "knowledge-service",
+                new IngestionTaskMessage.IngestionPayload("task-3")));
+        assertThrows(IllegalArgumentException.class, () -> new IngestionTaskMessage("event-3",
+                "KnowledgeIngestionRequested", 1, Instant.now().toString(), "tenant-a", "trace-1", "other-service",
+                new IngestionTaskMessage.IngestionPayload("task-3")));
+    }
+
+    private IngestionTaskMessage message(String eventId, String taskId) {
+        return new IngestionTaskMessage(eventId, "KnowledgeIngestionRequested", 1, Instant.now().toString(), "tenant-a",
+                "trace-1", "knowledge-service", new IngestionTaskMessage.IngestionPayload(taskId));
     }
 
     private static final class FakeGateway implements IngestionTaskGateway {

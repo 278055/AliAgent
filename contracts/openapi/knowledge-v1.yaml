@@ -10,17 +10,17 @@ paths:
   /api/v1/knowledge/ingestion-tasks/{taskId}:
     get:
       summary: 查询摄入状态
-      parameters: [{$ref: '#/components/parameters/Tenant'}, {name: taskId, in: path, required: true, schema: {type: string, format: uuid}}]
+      parameters: [{$ref: '#/components/parameters/Tenant'}, {$ref: '#/components/parameters/Subject'}, {$ref: '#/components/parameters/Trace'}, {$ref: '#/components/parameters/SubjectType'}, {$ref: '#/components/parameters/Roles'}, {$ref: '#/components/parameters/Permissions'}, {$ref: '#/components/parameters/AuthorizationSnapshot'}, {$ref: '#/components/parameters/ServiceAuthorization'}, {name: taskId, in: path, required: true, schema: {type: string, format: uuid}}]
       responses: {'200': {description: 任务状态}}
   /api/v1/knowledge/versions/{versionId}/publish:
     post:
       summary: 发布审核就绪版本
-      parameters: [{$ref: '#/components/parameters/Tenant'}, {name: versionId, in: path, required: true, schema: {type: string, format: uuid}}]
+      parameters: [{$ref: '#/components/parameters/Tenant'}, {$ref: '#/components/parameters/Subject'}, {$ref: '#/components/parameters/Trace'}, {$ref: '#/components/parameters/SubjectType'}, {$ref: '#/components/parameters/Roles'}, {$ref: '#/components/parameters/Permissions'}, {$ref: '#/components/parameters/AuthorizationSnapshot'}, {$ref: '#/components/parameters/ServiceAuthorization'}, {name: versionId, in: path, required: true, schema: {type: string, format: uuid}}]
       responses: {'200': {description: 已发布}, '409': {description: 非审核就绪状态}}
   /api/v1/knowledge/retrieval:query:
     post:
       summary: P3-B 检索契约，仅定义不在 P3-A 实现
-      parameters: [{$ref: '#/components/parameters/Tenant'}, {$ref: '#/components/parameters/Subject'}, {$ref: '#/components/parameters/SubjectType'}, {$ref: '#/components/parameters/Roles'}, {$ref: '#/components/parameters/Permissions'}, {$ref: '#/components/parameters/AuthorizationSnapshot'}]
+      parameters: [{$ref: '#/components/parameters/Tenant'}, {$ref: '#/components/parameters/Subject'}, {$ref: '#/components/parameters/Trace'}, {$ref: '#/components/parameters/SubjectType'}, {$ref: '#/components/parameters/Roles'}, {$ref: '#/components/parameters/Permissions'}, {$ref: '#/components/parameters/AuthorizationSnapshot'}, {$ref: '#/components/parameters/ServiceAuthorization'}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RetrievalRequest'}}}}
       responses: {'200': {description: 已发布版本的检索结果, content: {application/json: {schema: {$ref: '#/components/schemas/RetrievalResponse'}}}}}
 components:
@@ -32,6 +32,7 @@ components:
     Roles: {name: X-User-Roles, in: header, required: true, schema: {type: string}}
     Permissions: {name: X-User-Permissions, in: header, required: true, schema: {type: string}}
     AuthorizationSnapshot: {name: X-Authorization-Snapshot-Id, in: header, required: true, schema: {type: string, format: uuid}}
+    ServiceAuthorization: {name: X-Service-Authorization, in: header, required: true, schema: {type: string}}
   schemas:
     RetrievalRequest:
       type: object
@@ -46,10 +47,17 @@ components:
         data: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/RetrievalItem'}}}}
     RetrievalItem:
       type: object
-      required: [documentId, versionId, chunkId, content, score]
+      required: [documentId, versionId, chunkId, content, score, citation]
       properties:
         documentId: {type: string, format: uuid}
         versionId: {type: string, format: uuid}
         chunkId: {type: string, format: uuid}
         content: {type: string}
         score: {type: number}
+        citation:
+          type: object
+          required: [documentId, versionId, chunkId]
+          properties:
+            documentId: {type: string, format: uuid}
+            versionId: {type: string, format: uuid}
+            chunkId: {type: string, format: uuid}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aliagent.local/contracts/json-schema/knowledge-ingestion-requested-v1.schema.json",
+  "title": "KnowledgeIngestionRequested 负载 v1",
+  "type": "object",
+  "required": ["taskId"],
+  "properties": {
+    "taskId": { "type": "string", "format": "uuid" }
+  },
+  "additionalProperties": false
+}

@@ -5,12 +5,25 @@ channels:
     address: knowledge.ingestion.v1
     messages:
       IngestionRequested:
-        payload:
-          type: object
-          required: [eventId, eventVersion, tenantId, traceId, taskId]
-          properties:
-            eventId: {type: string, format: uuid}
-            eventVersion: {const: 1}
-            tenantId: {type: string}
-            traceId: {type: string}
-            taskId: {type: string, format: uuid}
+        $ref: '#/components/messages/IngestionRequested'
+operations:
+  publishIngestionRequested:
+    action: send
+    channel:
+      $ref: '#/channels/knowledge.ingestion.v1'
+    messages:
+      - $ref: '#/channels/knowledge.ingestion.v1/messages/IngestionRequested'
+components:
+  messages:
+    IngestionRequested:
+      name: IngestionRequested
+      contentType: application/json
+      payload:
+        allOf:
+          - $ref: ../json-schema/event-envelope-v1.schema.json
+          - type: object
+            properties:
+              eventType: {const: KnowledgeIngestionRequested}
+              producer: {const: knowledge-service}
+              payload:
+                $ref: ../json-schema/knowledge-ingestion-requested-v1.schema.json
