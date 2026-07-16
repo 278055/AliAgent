@@ -22,3 +22,13 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env ps
 PostgreSQL 初始化只在空数据卷首次创建时运行，生成 `conversation_db`、`orchestration_db`、`knowledge_db`、`evaluation_db`、`insight_db`，并分别授予 `conversation_user`、`orchestration_user`、`knowledge_user`、`evaluation_user`、`insight_user` 对其所属数据库的所有权。`knowledge_db` 同时由 PostgreSQL 管理员启用 `vector` 扩展，供 `knowledge_user` 所属数据库使用。
 
 停止服务使用 `docker compose -f deploy/docker-compose.yml --env-file deploy/.env down`。如需重新运行数据库初始化，必须先确认没有需要保留的本地数据，再删除对应的 Docker 卷。
+
+## P3 自动化集成测试
+
+在已安装 Docker Desktop、JDK 17 和 Maven 的 Windows 主机上运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy\test-p3-e2e.ps1
+```
+
+脚本使用独立 Compose 项目和 `test-p3-e2e-*` 凭据，自动验证五库账号隔离、RabbitMQ 中断后的 outbox 恢复、MinIO 消费期故障、旧 RAG 远程读取与本地回退。无论成功或失败，都会删除 `rag-test-p3-e2e` 测试数据、临时对象和 Compose 卷；可用 `-KeepEnvironment` 只在故障排查时保留环境。
