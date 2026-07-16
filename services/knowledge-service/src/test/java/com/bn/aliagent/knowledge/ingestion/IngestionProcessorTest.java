@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -25,13 +26,24 @@ class IngestionProcessorTest {
     @Test
     void 解析异常必须将任务和版本标记为失败() {
         FakeGateway gateway = new FakeGateway();
-        IngestionProcessor processor = new IngestionProcessor(gateway, task -> { throw new IllegalStateException("损坏文件"); }, text -> List.of(text), text -> new float[1024]);
+        IngestionProcessor processor = new IngestionProcessor(gateway, task -> { throw new IOException("storage endpoint leaked"); }, text -> List.of(text), text -> new float[1024]);
 
         processor.process(message("event-2", "task-2"));
 
         assertEquals(1, gateway.failedCount);
-        assertEquals("损坏文件", gateway.failureReason);
+        assertEquals("INGESTION_SOURCE_UNAVAILABLE", gateway.failureReason);
         assertEquals(0, gateway.readyCount);
+    }
+
+    @Test
+    void 非存储异常不得将内部信息写入任务诊断() {
+        FakeGateway gateway = new FakeGateway();
+        IngestionProcessor processor = new IngestionProcessor(gateway,
+                task -> { throw new IllegalStateException("internal parser path"); }, text -> List.of(text), text -> new float[1024]);
+
+        processor.process(message("event-4", "task-4"));
+
+        assertEquals("INGESTION_PROCESSING_FAILED", gateway.failureReason);
     }
 
     @Test

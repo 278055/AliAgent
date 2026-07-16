@@ -1,6 +1,7 @@
 package com.bn.aliagent.knowledge.ingestion;
 
 import com.bn.aliagent.knowledge.catalog.EmbeddingValidator;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,7 +40,9 @@ public final class IngestionProcessor {
     }
 
     private String diagnostic(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+        if (exception instanceof IOException) {
+            return "INGESTION_SOURCE_UNAVAILABLE";
+        }
+        return "INGESTION_PROCESSING_FAILED";
     }
 }

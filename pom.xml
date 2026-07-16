@@ -21,6 +21,7 @@
         <module>services/knowledge-service</module>
         <module>services/evaluation-service</module>
         <module>services/insight-service</module>
+        <module>legacy-monolith</module>
     </modules>
 
     <properties>

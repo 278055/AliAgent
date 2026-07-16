@@ -13,6 +13,7 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 @Configuration
 @Profile("database")
@@ -27,6 +28,11 @@ public class IngestionInfrastructureConfiguration {
     @Bean
     Jackson2JsonMessageConverter knowledgeMessageConverter() {
         return new Jackson2JsonMessageConverter();
+    }
+
+    @Bean
+    IngestionOutboxDispatcher ingestionOutboxDispatcher(IngestionOutboxGateway gateway, RabbitTemplate rabbit) {
+        return new IngestionOutboxDispatcher(gateway, message -> rabbit.convertAndSend(QUEUE, message));
     }
 
     @Bean

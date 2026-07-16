@@ -3,6 +3,7 @@ package com.bn.aliagent.knowledge.api;
 import com.bn.aliagent.knowledge.catalog.KnowledgeCatalogRepository;
 import com.bn.aliagent.knowledge.ingestion.IngestionInfrastructureConfiguration;
 import com.bn.aliagent.knowledge.ingestion.IngestionTaskMessage;
+import com.bn.aliagent.knowledge.ingestion.IngestionOutboxGateway;
 import com.bn.aliagent.knowledge.storage.KnowledgeObjectStorage;
 import com.bn.aliagent.knowledge.storage.ObjectKeyFactory;
 import java.security.MessageDigest;
@@ -12,13 +13,10 @@ import java.util.Map;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataAccessException;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,12 +33,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class KnowledgeController {
     private final JdbcTemplate jdbc;
     private final KnowledgeObjectStorage storage;
-    private final RabbitTemplate rabbit;
+    private final IngestionOutboxGateway outbox;
     private final KnowledgeCatalogRepository catalog;
     private final ObjectKeyFactory objectKeys = new ObjectKeyFactory();
 
-    public KnowledgeController(JdbcTemplate jdbc, KnowledgeObjectStorage storage, RabbitTemplate rabbit, KnowledgeCatalogRepository catalog) {
-        this.jdbc = jdbc; this.storage = storage; this.rabbit = rabbit; this.catalog = catalog;
+    public KnowledgeController(JdbcTemplate jdbc, KnowledgeObjectStorage storage, IngestionOutboxGateway outbox, KnowledgeCatalogRepository catalog) {
+        this.jdbc = jdbc; this.storage = storage; this.outbox = outbox; this.catalog = catalog;
     }
 
     @PostMapping(path = "/documents", consumes = "multipart/form-data")
@@ -58,9 +56,7 @@ public class KnowledgeController {
         IngestionTaskMessage message = new IngestionTaskMessage(eventId.toString(), IngestionTaskMessage.EVENT_TYPE, 1,
                 Instant.now().toString(), tenantId, traceId, IngestionTaskMessage.PRODUCER,
                 new IngestionTaskMessage.IngestionPayload(taskId.toString()));
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { rabbit.convertAndSend(IngestionInfrastructureConfiguration.QUEUE, message); }
-        });
+        outbox.enqueue(message);
         return Map.of("code", 200, "message", "", "data", Map.of("documentId", documentId, "versionId", versionId, "taskId", taskId));
     }
 

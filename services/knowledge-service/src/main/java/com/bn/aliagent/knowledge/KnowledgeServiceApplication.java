@@ -8,9 +8,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Bean;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableRabbit
+@EnableScheduling
 @Import({ServiceJwtSecurityConfiguration.class, KnowledgeServiceApplication.FilterConfiguration.class})
 public class KnowledgeServiceApplication {
     public static void main(String[] args) { SpringApplication.run(KnowledgeServiceApplication.class, args); }
