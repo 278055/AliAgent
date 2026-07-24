@@ -22,6 +22,7 @@ class StaffMessageServiceTest {
         StaffMessage first = service.send(owner);
         StaffMessage second = service.send(owner);
         assertEquals(first.id(), second.id());
+        assertEquals(first.id(), service.send(new StaffMessageCommand("tenant-a", conversation, "staff-1", "您好", UUID.randomUUID(), owner.requestId())).id());
     }
 
     @Test
@@ -44,7 +45,8 @@ class StaffMessageServiceTest {
         private final Map<UUID, StaffMessage> messages = new HashMap<>();
         private Repository(UUID conversationId) { this.conversationId = conversationId; }
         public ConversationAccess conversation(String tenantId, UUID id) { return "tenant-a".equals(tenantId) && conversationId.equals(id) ? new ConversationAccess(status, "staff-1") : null; }
-        public StaffMessage findByClientMessageId(String tenantId, String staffId, UUID id) { return messages.get(id); }
-        public StaffMessage append(StaffMessage message) { messages.put(message.clientMessageId(), message); return message; }
+        public StaffMessage findByRequestId(String tenantId, UUID requestId) { return messages.values().stream().filter(message -> message.requestId().equals(requestId)).findFirst().orElse(null); }
+        public StaffMessage findByClientMessageId(String tenantId, UUID conversationId, String staffId, UUID id) { StaffMessage message = messages.get(id); return message != null && message.conversationId().equals(conversationId) && message.staffId().equals(staffId) ? message : null; }
+        public StaffMessage appendIfAbsent(StaffMessage message) { messages.putIfAbsent(message.clientMessageId(), message); return messages.get(message.clientMessageId()); }
     }
 }

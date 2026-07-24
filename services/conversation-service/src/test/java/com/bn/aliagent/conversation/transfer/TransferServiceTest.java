@@ -60,12 +60,13 @@ class TransferServiceTest {
         private String audit;
         private final Map<UUID, Transfer> transfers = new HashMap<>();
         public String currentAgent(String tenantId, UUID conversationId) { return "tenant-a".equals(tenantId) ? currentAgent : null; }
+        public boolean conversationExists(String tenantId, UUID conversationId) { return "tenant-a".equals(tenantId); }
         public boolean targetEligible(String tenantId, String staffId) { return "tenant-a".equals(tenantId) && online && capacity && "staff-2".equals(staffId); }
-        public Transfer findByRequest(UUID requestId) { return transfers.values().stream().filter(value -> value.requestId().equals(requestId)).findFirst().orElse(null); }
+        public Transfer findByRequest(String tenantId, UUID requestId) { return transfers.values().stream().filter(value -> value.tenantId().equals(tenantId) && value.requestId().equals(requestId)).findFirst().orElse(null); }
         public Transfer save(Transfer transfer) { transfers.put(transfer.id(), transfer); return transfer; }
         public Transfer find(UUID id, String tenantId) { return "tenant-a".equals(tenantId) ? transfers.get(id) : null; }
-        public Transfer acceptAndReplace(Transfer transfer) { currentAgent = transfer.targetStaffId(); Transfer accepted = transfer.withStatus("ACCEPTED"); transfers.put(transfer.id(), accepted); return accepted; }
-        public Transfer requeueAndTransfer(SkillGroupTransferCommand command) { if (failSkillGroupTransfer) throw new IllegalStateException("queue unavailable"); currentAgent = null; return save(Transfer.skillGroup(command)); }
+        public Transfer acceptAndReplaceIfPending(Transfer transfer, UUID requestId) { currentAgent = transfer.targetStaffId(); Transfer accepted = transfer.withStatus("ACCEPTED"); transfers.put(transfer.id(), accepted); return accepted; }
+        public Transfer requeueAndTransferAtomically(SkillGroupTransferCommand command) { if (failSkillGroupTransfer) throw new IllegalStateException("queue unavailable"); currentAgent = null; return save(Transfer.skillGroup(command)); }
         public void auditSupervisorAction(String tenantId, UUID conversationId, String supervisorId, String action, String reason) { audit = action + ":" + reason; }
     }
 }

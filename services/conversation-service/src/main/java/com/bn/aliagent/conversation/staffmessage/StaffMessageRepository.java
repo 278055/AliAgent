@@ -4,6 +4,7 @@ import java.util.UUID;
 
 public interface StaffMessageRepository {
     ConversationAccess conversation(String tenantId, UUID conversationId);
-    StaffMessage findByClientMessageId(String tenantId, String staffId, UUID clientMessageId);
-    StaffMessage append(StaffMessage message);
+    StaffMessage findByRequestId(String tenantId, UUID requestId);
+    StaffMessage findByClientMessageId(String tenantId, UUID conversationId, String staffId, UUID clientMessageId);
+    StaffMessage appendIfAbsent(StaffMessage message);
 }

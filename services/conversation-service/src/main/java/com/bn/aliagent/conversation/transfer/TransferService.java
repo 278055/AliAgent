@@ -14,7 +14,8 @@ public final class TransferService {
 
     private Transfer requestAgentTransfer(AgentTransferCommand command, boolean forced) {
         validate(command.tenantId(), command.conversationId(), command.sourceStaffId(), command.requestId());
-        Transfer replay = repository.findByRequest(command.requestId());
+        if (!repository.conversationExists(command.tenantId(), command.conversationId())) throw new TransferException("会话不属于当前租户");
+        Transfer replay = repository.findByRequest(command.tenantId(), command.requestId());
         if (replay != null) return replay;
         if (forced) { requireSupervisorReason(command); repository.auditSupervisorAction(command.tenantId(), command.conversationId(), command.sourceStaffId(), "FORCE_TRANSFER", command.reason()); }
         else requireCurrent(command.tenantId(), command.conversationId(), command.sourceStaffId());
@@ -26,18 +27,21 @@ public final class TransferService {
     public Transfer accept(UUID transferId, String tenantId, String targetStaffId, UUID requestId) {
         Transfer transfer = repository.find(transferId, tenantId);
         if (transfer == null || !targetStaffId.equals(transfer.targetStaffId())) throw new TransferException("转派不属于当前客服或租户");
+        Transfer replay = repository.findByRequest(tenantId, requestId);
+        if (replay != null) return replay;
         if ("ACCEPTED".equals(transfer.status())) return transfer;
         if (!"PENDING".equals(transfer.status()) || !repository.targetEligible(tenantId, targetStaffId)) throw new TransferException("转派目标不可接受");
-        return repository.acceptAndReplace(transfer);
+        return repository.acceptAndReplaceIfPending(transfer, requestId);
     }
 
     public Transfer transferToSkillGroup(SkillGroupTransferCommand command) {
         validate(command.tenantId(), command.conversationId(), command.sourceStaffId(), command.requestId());
-        Transfer replay = repository.findByRequest(command.requestId());
+        if (!repository.conversationExists(command.tenantId(), command.conversationId())) throw new TransferException("会话不属于当前租户");
+        Transfer replay = repository.findByRequest(command.tenantId(), command.requestId());
         if (replay != null) return replay;
         if (command.supervisor()) { requireSupervisorReason(command); repository.auditSupervisorAction(command.tenantId(), command.conversationId(), command.sourceStaffId(), "FORCE_TRANSFER", command.reason()); }
         else requireCurrent(command.tenantId(), command.conversationId(), command.sourceStaffId());
-        try { return repository.requeueAndTransfer(command); }
+        try { return repository.requeueAndTransferAtomically(command); }
         catch (RuntimeException exception) { throw new TransferException("转技能组失败，原客服责任保持不变"); }
     }
 

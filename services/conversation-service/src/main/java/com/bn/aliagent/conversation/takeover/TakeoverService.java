@@ -10,9 +10,12 @@ public final class TakeoverService {
 
     public TakeoverResult takeOver(TakeoverCommand command) {
         validate(command);
-        Takeover replay = repository.findByRequest(command.requestId());
-        if (replay != null) return new TakeoverResult(replay, true);
         if (!repository.conversationExists(command.tenantId(), command.conversationId())) throw new TakeoverException("会话不属于当前租户");
+        Takeover replay = repository.findByRequest(command.tenantId(), command.requestId());
+        if (replay != null) {
+            if (!replay.conversationId().equals(command.conversationId()) || !replay.staffId().equals(command.staffId())) throw new TakeoverException("请求幂等键与命令不匹配");
+            return new TakeoverResult(replay, true);
+        }
         if (!repository.acceptedOrClaimed(command)) throw new TakeoverException("接管必须基于已接受邀请或成功领取");
         Takeover requested = new Takeover(UUID.randomUUID(), command.tenantId(), command.conversationId(), command.staffId(),
                 command.requestId(), "ACTIVE", Instant.now());

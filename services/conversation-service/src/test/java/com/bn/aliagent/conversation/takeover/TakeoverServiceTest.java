@@ -38,6 +38,8 @@ class TakeoverServiceTest {
                 "staff-2", UUID.randomUUID(), "NONE")));
         assertThrows(TakeoverException.class, () -> service.takeOver(new TakeoverCommand("tenant-b", CONVERSATION,
                 "staff-2", UUID.randomUUID(), "ACCEPTED_OFFER")));
+        assertThrows(TakeoverException.class, () -> service.takeOver(new TakeoverCommand("tenant-b", CONVERSATION,
+                "staff-1", requestId, "ACCEPTED_OFFER")));
     }
 
     private static final class Repository implements TakeoverRepository {
@@ -45,7 +47,7 @@ class TakeoverServiceTest {
         private final Map<String, Takeover> active = new ConcurrentHashMap<>();
         public boolean conversationExists(String tenantId, UUID conversationId) { return TENANT.equals(tenantId) && CONVERSATION.equals(conversationId); }
         public boolean acceptedOrClaimed(TakeoverCommand command) { return "ACCEPTED_OFFER".equals(command.evidence()); }
-        public Takeover findByRequest(UUID requestId) { return byRequest.get(requestId); }
+        public Takeover findByRequest(String tenantId, UUID requestId) { Takeover takeover = byRequest.get(requestId); return takeover != null && takeover.tenantId().equals(tenantId) ? takeover : null; }
         public synchronized Takeover createActiveIfAbsent(Takeover takeover) {
             Takeover current = active.putIfAbsent(takeover.tenantId() + takeover.conversationId(), takeover);
             byRequest.putIfAbsent(takeover.requestId(), current == null ? takeover : current);
