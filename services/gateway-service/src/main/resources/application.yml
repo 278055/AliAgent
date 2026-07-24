@@ -1,6 +1,17 @@
 spring:
   application:
     name: gateway-service
+  cloud:
+    gateway:
+      routes:
+        - id: conversation-websocket
+          uri: ${CONVERSATION_WS_URI:ws://localhost:8081}
+          predicates:
+            - Path=/api/v1/ws/conversations
+        - id: conversation-api
+          uri: ${CONVERSATION_HTTP_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/**
 management:
   endpoints:
     web:

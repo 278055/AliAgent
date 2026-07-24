@@ -1,0 +1,22 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"Conversation WebSocket Event v1",
+  "type":"object",
+  "required":["eventType","tenantId","conversationId","requestId","occurredAt"],
+  "properties": {
+    "eventType":{"enum":["human.request","human.send","human.takeover","human.release","agent.presence","human.message","conversation.status","conversation.queue","error"]},
+    "tenantId":{"type":"string","minLength":1},
+    "conversationId":{"type":"string","format":"uuid"},
+    "requestId":{"type":"string","format":"uuid"},
+    "occurredAt":{"type":"string","format":"date-time"},
+    "messageId":{"type":"string","format":"uuid"},
+    "sequence":{"type":"integer","minimum":1},
+    "sender":{"enum":["USER","STAFF","AI","SYSTEM"]},
+    "content":{"type":"string"},
+    "clientMessageId":{"type":"string","format":"uuid"},
+    "status":{"enum":["AI_ACTIVE","WAITING_HUMAN","HUMAN_ACTIVE","CLOSED","ONLINE","OFFLINE","BUSY"]},
+    "code":{"type":"string"},
+    "message":{"type":"string"}
+  },
+  "additionalProperties":false
+}

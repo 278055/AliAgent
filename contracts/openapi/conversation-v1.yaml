@@ -1,0 +1,28 @@
+openapi: 3.1.0
+info: {title: AliAgent Conversation API, version: 1.0.0}
+paths:
+  /api/v1/conversations:
+    post: {summary: 创建会话, parameters: [{$ref: '#/components/parameters/Context'}], responses: {'200': {description: 成功}}}
+    get: {summary: 查询会话, parameters: [{$ref: '#/components/parameters/Context'}], responses: {'200': {description: 成功}}}
+  /api/v1/conversations/{conversationId}:
+    get: {summary: 查询会话详情, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+    patch: {summary: 修改会话域字段, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+    delete: {summary: 软删除会话, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+  /api/v1/conversations/{conversationId}/messages:
+    get: {summary: 按序号补拉消息, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+    post:
+      summary: 原子提交用户消息、AIReplyRequested Outbox 与公开 AI STREAMING 占位消息
+      parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}, {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}]
+      responses: {'200': {description: 成功}}
+  /api/v1/conversations/{conversationId}/human-messages:
+    post: {summary: STAFF 提交公共人工消息, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+  /api/v1/conversations/{conversationId}/takeover:
+    post: {summary: STAFF 接管会话, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+  /api/v1/conversations/{conversationId}/human-request:
+    post: {summary: MEMBER 请求人工服务并进入 WAITING_HUMAN 队列, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+  /api/v1/conversations/{conversationId}/release:
+    post: {summary: STAFF 释放会话, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+components:
+  parameters:
+    Context: {name: X-Service-Authorization, in: header, required: true, schema: {type: string}}
+    ConversationId: {name: conversationId, in: path, required: true, schema: {type: string, format: uuid}}
