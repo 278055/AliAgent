@@ -50,6 +50,7 @@ screenshots/
 
 ### Local agent / assistant config ###
 .codex/
+.codegraph/
 .claude/
 .skills/
 skills/
