@@ -33,9 +33,12 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
             String authorization = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
             if (authorization == null || !authorization.startsWith("Bearer ")) throw new IllegalArgumentException("Bearer token required");
             TrustedIdentity identity = identityJwt.verify(authorization.substring(7));
+            String path = exchange.getRequest().getURI().getPath();
+            requireP7Role(path, identity);
             String traceId = UUID.randomUUID().toString();
             String requestId = UUID.randomUUID().toString();
-            String scope = exchange.getRequest().getMethod().name() + ":" + exchange.getRequest().getURI().getPath();
+            String scope = exchange.getRequest().getMethod().name() + ":" + path;
+            String audience = path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service" : "conversation-service";
             var request = exchange.getRequest().mutate().headers(headers -> {
                 INTERNAL_HEADERS.forEach(headers::remove);
                 headers.set("X-Tenant-Id", identity.tenantId());
@@ -45,11 +48,14 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
                 headers.set("X-User-Permissions", String.join(",", identity.permissions()));
                 headers.set("X-Trace-Id", traceId);
                 headers.set("X-Request-Id", requestId);
-                headers.set("X-Service-Authorization", "Bearer " + serviceJwt.issue("gateway-service", "conversation-service", List.of(scope)));
+                headers.set("X-Service-Authorization", "Bearer " + serviceJwt.issue("gateway-service", audience, List.of(scope)));
             }).build();
             exchange.getResponse().getHeaders().set("X-Trace-Id", traceId);
             exchange.getResponse().getHeaders().set("X-Request-Id", requestId);
             return chain.filter(exchange.mutate().request(request).build());
+        } catch (ForbiddenException exception) {
+            exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+            return exchange.getResponse().setComplete();
         } catch (RuntimeException exception) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
@@ -57,4 +63,18 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
     }
 
     @Override public int getOrder() { return Ordered.HIGHEST_PRECEDENCE; }
+
+    private void requireP7Role(String path, TrustedIdentity identity) {
+        if (path.startsWith("/api/v1/copilot/") && !"STAFF".equals(identity.subjectType())) {
+            throw new ForbiddenException();
+        }
+        if (path.startsWith("/api/v1/supervisor/") && !identity.roles().contains("SUPERVISOR")) {
+            throw new ForbiddenException();
+        }
+        if (path.startsWith("/api/v1/agent/") && !"STAFF".equals(identity.subjectType())) {
+            throw new ForbiddenException();
+        }
+    }
+
+    private static final class ForbiddenException extends RuntimeException { }
 }

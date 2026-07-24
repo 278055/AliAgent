@@ -31,13 +31,19 @@ class RealtimeDatabaseIntegrationTest {
                  Statement statement = connection.createStatement();
                  var result = statement.executeQuery("SELECT COUNT(*) FROM flyway_schema_history")) {
                 result.next();
-                assertEquals(6, result.getInt(1));
+                assertEquals(7, result.getInt(1));
             }
             try (Connection connection = DriverManager.getConnection(url, "postgres", "123456");
                  Statement statement = connection.createStatement();
-                 var result = statement.executeQuery("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('agent_skill_group', 'human_queue_item', 'human_assignment_offer', 'human_takeover', 'human_transfer', 'human_collaboration_outbox')")) {
+                 var result = statement.executeQuery("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('agent_skill_group', 'human_queue_item', 'human_assignment_offer', 'human_takeover', 'human_transfer', 'human_collaboration_outbox', 'conversation_business_context')")) {
                 result.next();
-                assertEquals(6, result.getInt(1));
+                assertEquals(7, result.getInt(1));
+            }
+            try (Connection connection = DriverManager.getConnection(url, "postgres", "123456");
+                 Statement statement = connection.createStatement();
+                 var result = statement.executeQuery("SELECT COUNT(*) FROM pg_constraint WHERE connamespace = current_schema()::regnamespace AND contype = 'u' AND conrelid = 'conversation_business_context'::regclass")) {
+                result.next();
+                assertEquals(1, result.getInt(1));
             }
         } finally { dropSchema(schema); }
     }

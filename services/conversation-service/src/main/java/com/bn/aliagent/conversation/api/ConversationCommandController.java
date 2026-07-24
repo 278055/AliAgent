@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/conversations")
 public class ConversationCommandController {
     private final ConversationService service;
-    public ConversationCommandController(ConversationService service) { this.service = service; }
+    private final com.bn.aliagent.conversation.core.ConversationBusinessContextService businessContexts;
+    public ConversationCommandController(ConversationService service, com.bn.aliagent.conversation.core.ConversationBusinessContextService businessContexts) { this.service = service; this.businessContexts = businessContexts; }
 
     @PostMapping public Map<String, Object> create(@RequestBody CreateConversation body, HttpServletRequest request) { return ok(view(service.create(TrustedConversationRequestContext.from(request), body.title()))); }
     @PatchMapping("/{id}") public Map<String, Object> patch(@PathVariable UUID id, @RequestBody PatchConversation body, HttpServletRequest request) { return ok(view(service.patch(TrustedConversationRequestContext.from(request), id, body.title(), body.pinned(), body.closed()))); }
@@ -34,6 +35,11 @@ public class ConversationCommandController {
     @PostMapping("/{id}/takeover") public Map<String, Object> takeOver(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.takeOver(TrustedConversationRequestContext.from(request), id))); }
     @PostMapping("/{id}/human-request") public Map<String, Object> requestHuman(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.requestHuman(TrustedConversationRequestContext.from(request), id))); }
     @PostMapping("/{id}/release") public Map<String, Object> release(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.release(TrustedConversationRequestContext.from(request), id))); }
+    @PutMapping("/{id}/business-context") public Map<String, Object> bindBusinessContext(@PathVariable UUID id, @RequestBody BindBusinessContext body, HttpServletRequest request) {
+        if (body.orderId() == null) throw new ConversationException("CONV-400-003", "orderId is required");
+        var context = businessContexts.bind(TrustedConversationRequestContext.from(request), id, body.orderId(), body.requestId());
+        return ok(new BusinessContextView(context.linkedOrderId(), context.linkedAfterSaleId()));
+    }
     private ConversationView view(ConversationModels.Conversation value) { return new ConversationView(value.id(), value.title(), value.status(), value.pinned()); }
     private MessageView messageView(ConversationModels.Message value) { return new MessageView(value.id(), value.sequence(), value.content(), value.status(), value.requestId()); }
     private Map<String, Object> ok(Object data) { return Map.of("code", 200, "message", "", "data", data); }

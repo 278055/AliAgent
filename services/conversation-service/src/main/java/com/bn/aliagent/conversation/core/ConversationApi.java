@@ -10,4 +10,6 @@ public final class ConversationApi {
     public record PatchConversation(String title, Boolean pinned, Boolean closed) { }
     public record SubmitMessage(String content, UUID requestId) { }
     public record SubmitStaffMessage(String content, UUID clientMessageId) { }
+    public record BindBusinessContext(Long orderId, UUID requestId) { }
+    public record BusinessContextView(Long linkedOrderId, String linkedAfterSaleId) { }
 }

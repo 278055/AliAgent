@@ -43,4 +43,36 @@ class TrustedIdentityGatewayFilterTest {
         new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7),
                 "conversation-service", "GET:/api/v1/conversations");
     }
+
+    @Test
+    void copilotRouteIsIssuedForTheOrchestrationServiceAndRejectsMembers() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        String member = identityToken(identitySecret, "member-1", "MEMBER", List.of("MEMBER"));
+        var memberExchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/copilot/conversations/" + java.util.UUID.randomUUID() + "/suggestions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + member).build());
+
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret).filter(memberExchange, value -> reactor.core.publisher.Mono.empty()).block();
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, memberExchange.getResponse().getStatusCode());
+        String staff = identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF"));
+        var staffExchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/copilot/conversations/" + java.util.UUID.randomUUID() + "/suggestions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + staff).build());
+        AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
+
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret).filter(staffExchange, value -> {
+            forwarded.set(value.getRequest().getHeaders());
+            return reactor.core.publisher.Mono.empty();
+        }).block();
+
+        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7),
+                "ai-orchestration-service", "GET:" + staffExchange.getRequest().getPath().value());
+    }
+
+    private static String identityToken(String secret, String subject, String type, List<String> roles) {
+        Instant now = Instant.now();
+        return Jwts.builder().subject(subject).claim("subjectType", type).claim("tenantId", "test-p4-tenant")
+                .claim("roles", roles).claim("permissions", List.of()).issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(60)))
+                .id("test-jti-" + subject).signWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8))).compact();
+    }
 }

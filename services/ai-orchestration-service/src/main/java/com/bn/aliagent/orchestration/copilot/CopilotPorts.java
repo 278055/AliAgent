@@ -6,7 +6,12 @@ import java.util.UUID;
 public final class CopilotPorts {
     private CopilotPorts() { }
     public record ConversationContext(String tenantId, UUID conversationId, String collaborationState, String assignedAgentId,
-                                      List<String> messages) { }
+                                      List<String> messages, Long linkedOrderId, String linkedAfterSaleId) {
+        public ConversationContext(String tenantId, UUID conversationId, String collaborationState, String assignedAgentId,
+                                   List<String> messages) {
+            this(tenantId, conversationId, collaborationState, assignedAgentId, messages, null, null);
+        }
+    }
     public interface ConversationContextPort { ConversationContext load(String tenantId, UUID conversationId); }
     public interface KnowledgeContextPort { List<CopilotModels.Citation> retrieve(String tenantId, UUID conversationId); }
     public interface CommerceFactPort { List<String> read(String tenantId, UUID conversationId); }

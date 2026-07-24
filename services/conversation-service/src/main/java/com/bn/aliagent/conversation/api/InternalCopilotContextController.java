@@ -26,6 +26,15 @@ public class InternalCopilotContextController {
         if (rows.isEmpty()) throw new IllegalArgumentException("conversation is not accessible");
         Map<String, Object> row = rows.get(0);
         List<String> messages = jdbc.query("SELECT content FROM message WHERE tenant_id=? AND conversation_id=? AND visibility='PUBLIC' ORDER BY sequence", (rs, index) -> rs.getString(1), trusted.tenantId(), conversationId);
-        return Map.of("tenantId", trusted.tenantId(), "conversationId", conversationId, "collaborationState", row.get("collaboration_status"), "assignedAgentId", row.get("staff_id") == null ? "" : row.get("staff_id"), "messages", messages);
+        List<Map<String, Object>> businessContexts = jdbc.queryForList("SELECT linked_order_id, linked_after_sale_id FROM conversation_business_context WHERE tenant_id=? AND conversation_id=?", trusted.tenantId(), conversationId);
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("tenantId", trusted.tenantId());
+        data.put("conversationId", conversationId);
+        data.put("collaborationState", row.get("collaboration_status"));
+        data.put("assignedAgentId", row.get("staff_id") == null ? "" : row.get("staff_id"));
+        data.put("messages", messages);
+        data.put("linkedOrderId", businessContexts.isEmpty() ? null : businessContexts.get(0).get("linked_order_id"));
+        data.put("linkedAfterSaleId", businessContexts.isEmpty() ? null : businessContexts.get(0).get("linked_after_sale_id"));
+        return data;
     }
 }
