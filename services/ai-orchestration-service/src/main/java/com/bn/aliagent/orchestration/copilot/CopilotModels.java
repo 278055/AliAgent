@@ -10,13 +10,13 @@ public final class CopilotModels {
     public enum SuggestionStatus { GENERATED, FAILED_RETRYABLE, ACCEPTED, MODIFIED, IGNORED }
     public enum ActionType { ACCEPTED, MODIFIED, IGNORED }
     public record Citation(String title, String source) { }
-    public record GenerateCommand(UUID requestId, UUID tenantId, UUID conversationId, UUID triggerMessageId,
+    public record GenerateCommand(UUID requestId, String tenantId, UUID conversationId, UUID triggerMessageId,
                                   String assignedAgentId, String currentAgentId, int refreshNo,
                                   String modelVersion, String promptVersion, String workflowVersion) { }
     public record SuggestionRequested(UUID eventId, GenerateCommand command) { }
     public record PromptContext(CopilotPorts.ConversationContext conversation, List<Citation> citations,
                                 List<String> commerceFacts, List<String> afterSaleFacts) { }
-    public record Suggestion(UUID suggestionId, UUID tenantId, UUID conversationId, UUID triggerMessageId,
+    public record Suggestion(UUID suggestionId, String tenantId, UUID conversationId, UUID triggerMessageId,
                              String assignedAgentId, int refreshNo, Visibility visibility, SuggestionStatus status,
                              String originalContent, String finalContent, String diffSummary, String modelVersion,
                              String promptVersion, String workflowVersion, List<Citation> citations, Instant createdAt) {
@@ -26,7 +26,7 @@ public final class CopilotModels {
                     workflowVersion, citations, createdAt);
         }
     }
-    public record ActionCommand(UUID requestId, UUID tenantId, UUID suggestionId, String agentId, String content) { }
+    public record ActionCommand(UUID requestId, String tenantId, UUID suggestionId, String agentId, String content) { }
     public record Action(UUID requestId, UUID suggestionId, ActionType type, String originalContent, String finalContent,
                          String diffSummary) { }
 }

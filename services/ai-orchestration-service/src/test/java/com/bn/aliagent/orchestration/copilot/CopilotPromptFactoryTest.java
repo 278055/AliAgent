@@ -11,7 +11,7 @@ class CopilotPromptFactoryTest {
     @Test
     void promptForbidsHallucinatedFactsAndChainOfThought() {
         var prompt = new CopilotPromptFactory().create(new CopilotModels.PromptContext(
-                new CopilotPorts.ConversationContext(UUID.randomUUID(), UUID.randomUUID(), "HUMAN_ACTIVE", "staff-1", List.of("客户消息")),
+                new CopilotPorts.ConversationContext("test-tenant", UUID.randomUUID(), "HUMAN_ACTIVE", "staff-1", List.of("客户消息")),
                 List.of(new CopilotModels.Citation("规则", "kb://rule")), List.of("订单已支付"), List.of("无售后")));
 
         assertTrue(prompt.contains("不得虚构订单、物流、退款或审批事实"));

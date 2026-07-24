@@ -12,7 +12,7 @@ class CopilotActionTest {
     void modifyAndSendAuditsOriginalFinalAndDiffAndIsIdempotent() {
         var repository = new CopilotRepository.InMemory();
         var sent = new int[1];
-        var tenant = UUID.randomUUID();
+        var tenant = "test-tenant";
         var conversation = UUID.randomUUID();
         var agent = "staff-1";
         var service = new CopilotService(repository,

@@ -8,7 +8,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CopilotServiceTest {
-    private static final UUID TENANT = UUID.randomUUID();
+    private static final String TENANT = "test-tenant";
     private static final UUID CONVERSATION = UUID.randomUUID();
     private static final UUID MESSAGE = UUID.randomUUID();
     private static final String AGENT = "staff-1";
@@ -55,10 +55,10 @@ class CopilotServiceTest {
     private CopilotService service(CopilotRepository repository, String status, String assignedAgent, boolean unavailable) {
         var context = new CopilotPorts.ConversationContext(TENANT, CONVERSATION, status, assignedAgent, List.of("客户：订单何时发货？"));
         var conversations = new CopilotPorts.ConversationContextPort() {
-            @Override public CopilotPorts.ConversationContext load(UUID tenantId, UUID conversationId) { return context; }
+            @Override public CopilotPorts.ConversationContext load(String tenantId, UUID conversationId) { return context; }
         };
         var knowledge = new CopilotPorts.KnowledgeContextPort() {
-            @Override public List<CopilotModels.Citation> retrieve(UUID tenantId, UUID conversationId) {
+            @Override public List<CopilotModels.Citation> retrieve(String tenantId, UUID conversationId) {
                 if (unavailable) throw new CopilotException("知识服务不可用");
                 return List.of(new CopilotModels.Citation("发货时效", "kb://shipping"));
             }
@@ -67,7 +67,7 @@ class CopilotServiceTest {
         var afterSale = (CopilotPorts.AfterSaleFactPort) (tenantId, conversationId) -> List.of("暂无售后申请");
         return new CopilotService(repository, conversations, knowledge, commerce, afterSale,
                 (prompt, context1) -> "建议：请核对订单状态后向客户说明。", new CopilotPromptFactory(), new CopilotPorts.StaffMessagePort() {
-                    @Override public void send(UUID tenantId, UUID conversationId, String agentId, String content, UUID requestId) { }
+                    @Override public void send(String tenantId, UUID conversationId, String agentId, String content, UUID requestId) { }
                 });
     }
 
