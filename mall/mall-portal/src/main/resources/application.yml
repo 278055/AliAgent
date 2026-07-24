@@ -6,6 +6,11 @@ spring:
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
 
 mybatis:
   mapper-locations:

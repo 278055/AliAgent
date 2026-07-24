@@ -48,4 +48,4 @@
 
 mall 的售后事实属于 MySQL `mall` 库。冻结的表名为 `after_sale_case`、`after_sale_case_item`、`after_sale_approval`、`after_sale_saga`、`after_sale_saga_step`、`refund_record`、`benefit_rollback_record`、`after_sale_outbox`、`after_sale_inbox`、`after_sale_audit`。金额全部使用 `DECIMAL(19,2)`，禁止 `float`/`double`。
 
-唯一约束：`command_id`；`(tenant_id, command_type, idempotency_key)`；`refund_request_id`；有效订单项上的冲突活动申请；`after_sale_outbox.event_id`；`(after_sale_inbox.event_id, consumer_name)`。迁移文件预留在 `mall/mall-portal/src/main/resources/db/migration/`；该模块目前没有启用 Flyway，启用依赖与配置只能作为集成会话的公共变更，实施任务不得私改 POM 或 `application*.yml`。
+唯一约束：`command_id`；`(tenant_id, command_type, idempotency_key)`；`refund_request_id`；有效订单项上的冲突活动申请；`after_sale_outbox.event_id`；`(after_sale_inbox.event_id, consumer_name)`。公共基础迁移位于 `mall/mall-portal/src/main/resources/db/migration/`，并由 portal 的 Flyway 在既有 MySQL `mall` schema 上以 baseline version `0` 执行；实施任务不得私改 POM 或 `application*.yml`。
