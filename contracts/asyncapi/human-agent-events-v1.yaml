@@ -1,0 +1,22 @@
+asyncapi: 3.0.0
+info:
+  title: AliAgent Human Agent Events
+  version: 1.0.0
+channels:
+  copilot.suggestion.requested.v1:
+    address: copilot.suggestion.requested.v1
+  copilot.suggestion.generated.v1:
+    address: copilot.suggestion.generated.v1
+  copilot.suggestion.actioned.v1:
+    address: copilot.suggestion.actioned.v1
+components:
+  messages:
+    CopilotSuggestionRequested:
+      payload:
+        $ref: ../schemas/human-agent/copilot-suggestion-requested-v1.schema.json
+    CopilotSuggestionGenerated:
+      payload:
+        $ref: ../schemas/human-agent/copilot-suggestion-generated-v1.schema.json
+    CopilotSuggestionActioned:
+      payload:
+        $ref: ../schemas/human-agent/copilot-suggestion-actioned-v1.schema.json

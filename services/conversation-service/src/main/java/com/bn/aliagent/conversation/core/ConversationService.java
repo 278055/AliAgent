@@ -64,13 +64,15 @@ public class ConversationService {
         if (!conversation.ownerSubjectId().equals(context.subjectId())) {
             throw new ConversationException("TENANT-403-001", "Conversation is not owned by the caller");
         }
+        if ("CLOSED".equals(conversation.status())) throw new ConversationException("CONV-409-001", "Closed conversation cannot accept messages");
         Message userMessage = repository.findUserMessage(context.tenantId(), context.subjectId(), conversationId, requestId).orElse(null);
         if (userMessage != null) {
-            Message aiMessage = repository.findAiGeneration(context.tenantId(), conversationId, requestId).orElseThrow();
-            return new ConversationModels.Generation(generationId(aiMessage), userMessage, aiMessage);
+            Message aiMessage = repository.findAiGeneration(context.tenantId(), conversationId, requestId).orElse(null);
+            return new ConversationModels.Generation(aiMessage == null ? null : generationId(aiMessage), userMessage, aiMessage);
         }
         userMessage = repository.appendUserMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
                 0, "USER", "TEXT", "PRIVATE", content, "SUBMITTED", requestId, "{}", Instant.now()), context.subjectId());
+        if (!"AI_ACTIVE".equals(conversation.status())) return new ConversationModels.Generation(null, userMessage, null);
         Message aiMessage = repository.findAiGeneration(context.tenantId(), conversationId, requestId).orElseGet(() -> {
             UUID generationId = UUID.randomUUID();
             return repository.appendAiStreamingMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,

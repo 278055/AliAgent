@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "workspace:list": "pnpm -r list --depth -1"
+    "workspace:list": "pnpm -r list --depth -1",
+    "build:admin": "pnpm --filter @aliagent/admin build",
+    "check:api-client": "pnpm --filter @aliagent/api-client exec tsc --noEmit"
   },
   "dependencies": {
     "vue": "^3.5.13",

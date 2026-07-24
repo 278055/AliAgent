@@ -23,8 +23,12 @@ public class ConversationCommandController {
     @PostMapping("/{id}/messages") public Map<String, Object> submit(@PathVariable UUID id, @RequestBody SubmitMessage body, @RequestHeader("Idempotency-Key") String key, HttpServletRequest request) {
         if (body.content() == null || body.content().isBlank()) throw new ConversationException("CONV-400-002", "content is required");
         var generation = service.submitWithGeneration(TrustedConversationRequestContext.from(request), id, body.content(), body.requestId(), key);
-        return ok(Map.of("accepted", true, "message", messageView(generation.userMessage()), "generationId", generation.generationId(),
-                "aiMessage", messageView(generation.aiMessage())));
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("accepted", true);
+        data.put("message", messageView(generation.userMessage()));
+        data.put("generationId", generation.generationId());
+        data.put("aiMessage", generation.aiMessage() == null ? null : messageView(generation.aiMessage()));
+        return ok(data);
     }
     @PostMapping("/{id}/human-messages") public Map<String, Object> staffMessage(@PathVariable UUID id, @RequestBody SubmitStaffMessage body, HttpServletRequest request) { return ok(messageView(service.submitStaffMessage(TrustedConversationRequestContext.from(request), id, body.content(), body.clientMessageId()))); }
     @PostMapping("/{id}/takeover") public Map<String, Object> takeOver(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.takeOver(TrustedConversationRequestContext.from(request), id))); }

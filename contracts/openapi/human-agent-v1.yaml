@@ -1,0 +1,16 @@
+openapi: 3.1.0
+info:
+  title: AliAgent Human Agent API
+  version: 1.0.0
+paths:
+  /api/v1/agent/skill-groups:
+    get: { summary: 列出技能组, responses: {'200': {description: OK}} }
+    post: { summary: 创建技能组, responses: {'201': {description: Created}} }
+  /api/v1/agent/queue:
+    get: { summary: 当前客服队列, responses: {'200': {description: OK}} }
+  /api/v1/supervisor/queue:
+    get: { summary: 主管队列, responses: {'200': {description: OK}} }
+  /api/v1/conversations/{conversationId}/human-messages:
+    post: { summary: 发送人工消息, parameters: [{name: conversationId, in: path, required: true, schema: {type: string, format: uuid}}], responses: {'201': {description: Created}} }
+  /api/v1/copilot/conversations/{conversationId}/suggestions:
+    get: { summary: 获取副驾建议, parameters: [{name: conversationId, in: path, required: true, schema: {type: string, format: uuid}}], responses: {'200': {description: OK}} }

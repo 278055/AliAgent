@@ -91,11 +91,27 @@ class ConversationServiceTest {
         assertEquals("WAITING_HUMAN", waiting.status());
     }
 
+    @Test
+    void humanActiveSubmissionPersistsOnlyUserMessageAndDoesNotEnqueuePublicAiReply() {
+        UUID conversationId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        InMemoryRepository repository = new InMemoryRepository(conversationId, "HUMAN_ACTIVE");
+        ConversationService service = new ConversationService(repository);
+        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-subject", "MEMBER", UUID.randomUUID().toString(), UUID.randomUUID());
+
+        var result = service.submitWithGeneration(context, conversationId, "test-human-message", requestId, requestId.toString());
+
+        assertEquals(null, result.aiMessage());
+        assertEquals(1, repository.messages.size());
+        assertEquals(0, repository.outbox.size());
+    }
+
     private static final class InMemoryRepository implements ConversationRepository {
         private final Conversation conversation;
         private final List<Message> messages = new ArrayList<>();
         private final List<ReplyRequest> outbox = new ArrayList<>();
-        private InMemoryRepository(UUID id) { Instant now = Instant.now(); conversation = new Conversation(id, "test-tenant", "test-subject", "test-p4-a", "HUMAN_ACTIVE", false, now, now); }
+        private InMemoryRepository(UUID id) { this(id, "AI_ACTIVE"); }
+        private InMemoryRepository(UUID id, String status) { Instant now = Instant.now(); conversation = new Conversation(id, "test-tenant", "test-subject", "test-p4-a", status, false, now, now); }
         public Conversation create(Conversation value) { return value; }
         public Optional<Conversation> findConversation(UUID id, String tenant) { return conversation.id().equals(id) && conversation.tenantId().equals(tenant) ? Optional.of(conversation) : Optional.empty(); }
         public List<Conversation> listConversations(String tenant, int offset, int limit) { return List.of(); }
