@@ -47,6 +47,23 @@ class ConversationServiceTest {
     }
 
     @Test
+    void firstSubmissionEnqueuesV2ReplyWithBothMessageIdentifiersAndGeneration() {
+        UUID conversationId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        InMemoryRepository repository = new InMemoryRepository(conversationId);
+        ConversationService service = new ConversationService(repository);
+        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-subject", "MEMBER", UUID.randomUUID().toString(), UUID.randomUUID());
+
+        var result = service.submitWithGeneration(context, conversationId, "test-p5-message", requestId, requestId.toString());
+
+        ReplyRequest request = repository.outbox.get(0);
+        assertEquals(2, request.eventVersion());
+        assertEquals(result.userMessage().id(), request.messageId());
+        assertEquals(result.aiMessage().id(), request.replyMessageId());
+        assertEquals(result.generationId(), request.generationId());
+    }
+
+    @Test
     void duplicateStaffClientMessageIdReturnsThePersistedHumanMessage() {
         UUID conversationId = UUID.randomUUID();
         UUID clientMessageId = UUID.randomUUID();

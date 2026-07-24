@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aliagent.local/contracts/json-schema/ai-reply-requested-v2.schema.json",
+  "title": "AIReplyRequested 负载 v2",
+  "type": "object",
+  "required": ["conversationId", "messageId", "replyMessageId", "generationId", "requestId"],
+  "properties": {
+    "conversationId": { "type": "string", "format": "uuid" },
+    "messageId": { "type": "string", "format": "uuid" },
+    "replyMessageId": { "type": "string", "format": "uuid" },
+    "generationId": { "type": "string", "format": "uuid" },
+    "requestId": { "type": "string", "format": "uuid" }
+  },
+  "additionalProperties": false
+}

@@ -13,11 +13,29 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.UUID;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 class RealtimeDatabaseIntegrationTest {
+    @Test
+    void migratesAnEmptySchemaIncludingTheV2OutboxIdempotencyConstraint() throws Exception {
+        String schema = "test_p5_flyway_" + UUID.randomUUID().toString().replace("-", "");
+        String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;
+        createSchema(schema);
+        try {
+            Flyway.configure().dataSource(url, "postgres", "123456").schemas(schema)
+                    .locations("filesystem:src/main/resources/db/migration").load().migrate();
+            try (Connection connection = DriverManager.getConnection(url, "postgres", "123456");
+                 Statement statement = connection.createStatement();
+                 var result = statement.executeQuery("SELECT COUNT(*) FROM flyway_schema_history")) {
+                result.next();
+                assertEquals(5, result.getInt(1));
+            }
+        } finally { dropSchema(schema); }
+    }
+
     @Test
     void persistsIdempotentHumanMessagePresenceAndConnectionInIsolatedSchema() throws Exception {
         String schema = "test_p4_c_" + UUID.randomUUID().toString().replace("-", "");
