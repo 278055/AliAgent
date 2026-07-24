@@ -109,16 +109,18 @@ public class JdbcConversationRepository implements ConversationRepository {
     @Override
     public void enqueue(ReplyRequest value) {
         String payload = "{\"conversationId\":\"" + value.conversationId() + "\",\"messageId\":\"" + value.messageId()
+                + "\",\"replyMessageId\":\"" + value.replyMessageId() + "\",\"generationId\":\"" + value.generationId()
                 + "\",\"requestId\":\"" + value.requestId() + "\"}";
         jdbc.update("INSERT INTO conversation_outbox (event_id, tenant_id, conversation_id, event_type, event_version, trace_id, request_id, payload, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?)",
-                value.eventId(), value.tenantId(), value.conversationId(), "AIReplyRequested", 1, value.traceId(), value.requestId(), payload, timestamp(value.occurredAt()));
+                value.eventId(), value.tenantId(), value.conversationId(), "AIReplyRequested", value.eventVersion(), value.traceId(), value.requestId(), payload, timestamp(value.occurredAt()));
     }
 
     @Override
     public List<ReplyRequest> pendingReplies(int limit) {
-        return jdbc.query("SELECT event_id, tenant_id, conversation_id, request_id, trace_id, occurred_at, payload ->> 'messageId' FROM conversation_outbox WHERE published_at IS NULL ORDER BY created_at LIMIT ?",
-                (rs, row) -> new ReplyRequest(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class),
-                        UUID.fromString(rs.getString(7)), rs.getObject(4, UUID.class), rs.getString(5), rs.getTimestamp(6).toInstant()), limit);
+        return jdbc.query("SELECT event_id, event_version, tenant_id, conversation_id, request_id, trace_id, occurred_at, payload ->> 'messageId', payload ->> 'replyMessageId', payload ->> 'generationId' FROM conversation_outbox WHERE published_at IS NULL ORDER BY created_at LIMIT ?",
+                (rs, row) -> new ReplyRequest(rs.getObject(1, UUID.class), rs.getInt(2), rs.getString(3), rs.getObject(4, UUID.class),
+                        UUID.fromString(rs.getString(8)), nullableUuid(rs.getString(9)), nullableUuid(rs.getString(10)),
+                        rs.getObject(5, UUID.class), rs.getString(6), rs.getTimestamp(7).toInstant()), limit);
     }
 
     @Override
@@ -129,5 +131,6 @@ public class JdbcConversationRepository implements ConversationRepository {
     private Message message(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Message(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getLong(4), rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9), rs.getObject(10, UUID.class), rs.getString(11), rs.getTimestamp(12).toInstant());
     }
+    private UUID nullableUuid(String value) { return value == null ? null : UUID.fromString(value); }
     private Timestamp timestamp(Instant value) { return Timestamp.from(value); }
 }

@@ -60,4 +60,26 @@ class ContractValidatorTest {
                 payload.get(1).at("/properties/payload/$ref").asText());
         assertEquals("knowledge-service", payload.get(1).at("/properties/producer/const").asText());
     }
+
+    @Test
+    void aiReplyRequestedContractsKeepV1SeparateAndRequireV2StreamingIdentifiers() throws Exception {
+        ObjectMapper json = new ObjectMapper();
+        JsonNode v1AsyncApi = new ObjectMapper(new YAMLFactory()).readTree(
+                Path.of("..", "asyncapi", "ai-reply-requested-v1.yaml").toFile());
+        JsonNode v2AsyncApi = new ObjectMapper(new YAMLFactory()).readTree(
+                Path.of("..", "asyncapi", "ai-reply-requested-v2.yaml").toFile());
+        JsonNode v1Envelope = json.readTree(Path.of("..", "json-schema", "event-envelope-v1.schema.json").toFile());
+        JsonNode v2Envelope = json.readTree(Path.of("..", "json-schema", "event-envelope-v2.schema.json").toFile());
+        JsonNode v1Payload = json.readTree(Path.of("..", "json-schema", "ai-reply-requested-v1.schema.json").toFile());
+        JsonNode v2Payload = json.readTree(Path.of("..", "json-schema", "ai-reply-requested-v2.schema.json").toFile());
+
+        assertEquals(1, v1AsyncApi.path("channels").size());
+        assertEquals("ai.reply.requested.v1", v1AsyncApi.at("/channels/ai.reply.requested.v1/address").asText());
+        assertEquals("ai.reply.requested.v2", v2AsyncApi.at("/channels/ai.reply.requested.v2/address").asText());
+        assertEquals(1, v1Envelope.at("/properties/eventVersion/const").asInt());
+        assertEquals(2, v2Envelope.at("/properties/eventVersion/const").asInt());
+        assertEquals("[\"conversationId\",\"messageId\",\"requestId\"]", v1Payload.path("required").toString());
+        assertTrue(v2Payload.path("required").toString().contains("replyMessageId"));
+        assertTrue(v2Payload.path("required").toString().contains("generationId"));
+    }
 }
