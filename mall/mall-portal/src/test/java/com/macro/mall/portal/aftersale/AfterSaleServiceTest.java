@@ -8,6 +8,11 @@ import com.macro.mall.portal.aftersale.core.AfterSaleCommand;
 import com.macro.mall.portal.aftersale.core.PortalOrderCancellationAdapter;
 import com.macro.mall.portal.aftersale.core.ResolvedOrderTenant;
 import com.macro.mall.portal.aftersale.persistence.JdbcOrderTenantResolver;
+import com.macro.mall.portal.aftersale.api.BenefitRollbackPort;
+import com.macro.mall.portal.aftersale.api.NotificationPort;
+import com.macro.mall.portal.aftersale.api.RefundPort;
+import com.macro.mall.portal.aftersale.api.SagaStepReport;
+import com.macro.mall.portal.aftersale.api.ManualReconciliationCommand;
 import com.macro.mall.portal.service.OmsPortalOrderService;
 import com.macro.mall.mapper.OmsOrderMapper;
 import com.macro.mall.model.OmsOrder;
@@ -161,5 +166,16 @@ class AfterSaleServiceTest {
         when(jdbc.query(eq("SELECT order_id, tenant_id, source, bound_at FROM order_tenant_binding WHERE order_id=?"), any(RowMapper.class), eq(117L)))
                 .thenReturn(Arrays.asList(new ResolvedOrderTenant(117L, "test-tenant", "ORDER_CREATION", Instant.now()), new ResolvedOrderTenant(117L, "other", "ORDER_CREATION", Instant.now())));
         assertThrows(SecurityException.class, () -> resolver.resolve(117L));
+    }
+
+    @Test
+    void P6C所需端口与Saga上报命令保持独立且携带幂等键() {
+        assertEquals(2, RefundPort.class.getDeclaredMethods().length);
+        assertEquals(3, BenefitRollbackPort.class.getDeclaredMethods().length);
+        assertEquals(1, NotificationPort.class.getDeclaredMethods().length);
+        SagaStepReport report = new SagaStepReport("test-event-5", "test-step-key", "REFUND_SUCCEEDED", "SUCCEEDED", null);
+        ManualReconciliationCommand command = new ManualReconciliationCommand("test-command-18", "test-key-18", "COMPLETED");
+        assertEquals("test-step-key", report.idempotencyKey());
+        assertEquals("test-command-18", command.commandId());
     }
 }

@@ -5,6 +5,8 @@ import com.macro.mall.portal.aftersale.api.AfterSaleQueryPort;
 import com.macro.mall.portal.aftersale.api.AfterSaleView;
 import com.macro.mall.portal.aftersale.api.CreateAfterSaleDraft;
 import com.macro.mall.portal.aftersale.api.TrustedAfterSaleContext;
+import com.macro.mall.portal.aftersale.api.SagaStepReport;
+import com.macro.mall.portal.aftersale.api.ManualReconciliationCommand;
 import com.macro.mall.portal.aftersale.persistence.AfterSaleJdbcRepository;
 import com.macro.mall.mapper.OmsOrderMapper;
 import com.macro.mall.model.OmsOrder;
@@ -105,6 +107,40 @@ public class PersistentAfterSaleService implements AfterSaleCommandPort, AfterSa
             repository.outbox(caseId, context, UUID.randomUUID().toString(), "ManualReconciliationRequired");
         } else throw new IllegalArgumentException("unsupported saga event");
         repository.audit(caseId, context, eventType, null);
+    }
+
+    @Override
+    @Transactional
+    public void reportStep(TrustedAfterSaleContext context, Long caseId, SagaStepReport report) {
+        if (!context.isStaff()) throw new SecurityException("service step report requires staff context");
+        requireCase(context, caseId);
+        if (!repository.claimInbox(report.eventId(), "p6-c-step-report", context.tenantId())) return;
+        repository.ensureSagaStep(caseId, report.stepType(), report.idempotencyKey());
+        if (!repository.updateSagaStep(caseId, report.stepType(), report.status(), report.idempotencyKey(), report.errorMessage())) throw new IllegalStateException("unknown or idempotency-mismatched saga step");
+        if ("FAILED".equals(report.status())) {
+            repository.updateStatus(caseId, AfterSaleStatus.RETRY_PENDING);
+            repository.updateSaga(caseId, "RETRY_PENDING", report.stepType());
+        } else if ("BENEFIT_ROLLBACK_FAILED".equals(report.status())) {
+            repository.updateStatus(caseId, AfterSaleStatus.MANUAL_RECONCILIATION);
+            repository.updateSaga(caseId, "MANUAL_RECONCILIATION", "MANUAL_RECONCILIATION");
+            repository.outbox(caseId, context, UUID.randomUUID().toString(), "ManualReconciliationRequired");
+        }
+        repository.audit(caseId, context, "SAGA_STEP_" + report.status(), null);
+    }
+
+    @Override
+    @Transactional
+    public AfterSaleView resolveManualReconciliation(TrustedAfterSaleContext context, Long caseId, ManualReconciliationCommand command) {
+        if (!context.isStaff()) throw new SecurityException("manual reconciliation requires staff context");
+        AfterSaleView current = requireCase(context, caseId);
+        if (!repository.claimInbox(command.commandId(), "manual-reconciliation", context.tenantId())) return current;
+        if (current.status() != AfterSaleStatus.MANUAL_RECONCILIATION) throw new IllegalStateException("manual reconciliation is not pending");
+        AfterSaleStatus target = "COMPLETED".equals(command.resolution()) ? AfterSaleStatus.COMPLETED : AfterSaleStatus.FAILED;
+        repository.updateStatus(caseId, target);
+        repository.updateSaga(caseId, target.name(), target.name());
+        repository.outbox(caseId, context, UUID.randomUUID().toString(), target == AfterSaleStatus.COMPLETED ? "AfterSaleCompleted" : "ManualReconciliationRequired");
+        repository.audit(caseId, context, "MANUAL_RECONCILIATION_" + target.name(), command.commandId());
+        return requireCase(context, caseId);
     }
 
     @Override public Optional<AfterSaleView> find(TrustedAfterSaleContext context, Long caseId) { return repository.findById(context.tenantId(), caseId); }

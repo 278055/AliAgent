@@ -37,6 +37,10 @@ public class AfterSaleJdbcRepository {
         return key.getKey().longValue();
     }
     public void insertSagaStep(long sagaId, String step, String key) { jdbc.update("INSERT INTO after_sale_saga_step(saga_id,step_type,status,idempotency_key) VALUES (?,?,?,?)", sagaId, step, "PENDING", key); }
+    public void ensureSagaStep(long caseId, String step, String idempotencyKey) { jdbc.update("INSERT IGNORE INTO after_sale_saga_step(saga_id,step_type,status,idempotency_key) SELECT id, ?, 'PENDING', ? FROM after_sale_saga WHERE case_id=?", step, idempotencyKey, caseId); }
+    public boolean updateSagaStep(long caseId, String step, String status, String idempotencyKey, String error) {
+        return jdbc.update("UPDATE after_sale_saga_step s JOIN after_sale_saga g ON s.saga_id=g.id SET s.status=?, s.error_message=?, s.completed_at=CASE WHEN ?='SUCCEEDED' THEN CURRENT_TIMESTAMP(6) ELSE s.completed_at END, s.attempt_count=s.attempt_count+1 WHERE g.case_id=? AND s.step_type=? AND s.idempotency_key=?", status, error, status, caseId, step, idempotencyKey) == 1;
+    }
     public void updateSaga(long caseId, String status, String step) { jdbc.update("UPDATE after_sale_saga SET status=?, current_step=?, version=version+1 WHERE case_id=?", status, step, caseId); }
     public void insertApproval(long caseId, TrustedAfterSaleContext context, String type) { jdbc.update("INSERT INTO after_sale_approval(case_id,tenant_id,approval_type,status,authorization_snapshot_id) VALUES (?,?,?,?,?)", caseId, context.tenantId(), type, "PENDING", context.authorizationSnapshotId()); }
     public void decideApproval(long caseId, TrustedAfterSaleContext context, String type, String status) { jdbc.update("UPDATE after_sale_approval SET status=?, approver_id=?, decided_at=CURRENT_TIMESTAMP(6) WHERE case_id=? AND approval_type=? AND tenant_id=?", status, String.valueOf(context.actorId()), caseId, type, context.tenantId()); }
