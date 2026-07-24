@@ -33,8 +33,13 @@
 | `AfterSaleOutboxPort` / `AfterSaleInboxPort` | 原子事件写入与 `eventId + consumer` 去重 | A |
 | `RuleVersionResolver` | 创建时解析、固定并返回规则版本 | A |
 | `AfterSaleAuditPort` | 记录命令、状态转换、审批和人工对账审计 | A |
+| `OrderTenantResolver` | 从 mall 订单租户绑定解析订单的唯一 tenantId | 集成 |
 
 `RefundPort` 的 `refundRequestId` 是渠道幂等键。相同键重复 `refund` 必须返回原退款事实；超时后的本地状态为 `UNKNOWN`，只能先调用 `query`，确认未退款后才能继续操作。默认实现只能是 `MockRefundAdapter`，可显式模拟成功、明确失败、超时和重复请求；P6 禁止接入微信、支付宝或任何真实支付渠道。
+
+`OrderTenantResolver.resolve(orderId)` 返回 `ResolvedOrderTenant(orderId, tenantId, source, resolvedAt)`。它的唯一实现数据源是 `order_tenant_binding`，不得从请求头、AI payload、会员 ID、订单用户名或事件中的硬编码租户推断。售后命令的可信 `tenantId` 必须与解析结果严格相等；订单不存在、无绑定、多条绑定或不相等均以 `ORDER_TENANT_MISMATCH` 拒绝且写入审计。P6-A 只能调用端口，不得直接查询或写入绑定表。
+
+历史回填采用显式、可审计的运营映射：每个历史订单以目标部署的已批准租户写入一条绑定，记录 `source=HISTORICAL_BACKFILL`、执行批次、操作者、时间和依据；禁止将空值、`mall-default` 或当前请求租户作为自动回填值。回填完成前，该订单不得创建售后申请。新订单必须在订单创建本地事务中写入 `source=ORDER_CREATION` 绑定；此写入属于集成会话的后续公共变更，未落地前新订单同样拒绝 P6 写操作。
 
 ## 命令与事件
 
@@ -46,6 +51,6 @@
 
 ## 数据库与迁移
 
-mall 的售后事实属于 MySQL `mall` 库。冻结的表名为 `after_sale_case`、`after_sale_case_item`、`after_sale_approval`、`after_sale_saga`、`after_sale_saga_step`、`refund_record`、`benefit_rollback_record`、`after_sale_outbox`、`after_sale_inbox`、`after_sale_audit`。金额全部使用 `DECIMAL(19,2)`，禁止 `float`/`double`。
+mall 的售后事实属于 MySQL `mall` 库。冻结的表名为 `after_sale_case`、`after_sale_case_item`、`after_sale_approval`、`after_sale_saga`、`after_sale_saga_step`、`refund_record`、`benefit_rollback_record`、`after_sale_outbox`、`after_sale_inbox`、`after_sale_audit`、`order_tenant_binding`。金额全部使用 `DECIMAL(19,2)`，禁止 `float`/`double`。
 
 唯一约束：`command_id`；`(tenant_id, command_type, idempotency_key)`；`refund_request_id`；有效订单项上的冲突活动申请；`after_sale_outbox.event_id`；`(after_sale_inbox.event_id, consumer_name)`。公共基础迁移位于 `mall/mall-portal/src/main/resources/db/migration/`，并由 portal 的 Flyway 在既有 MySQL `mall` schema 上以 baseline version `0` 执行；实施任务不得私改 POM 或 `application*.yml`。

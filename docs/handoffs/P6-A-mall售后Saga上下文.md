@@ -16,7 +16,7 @@
 
 ## 幂等、事务与安全
 
-以 `commandId` 及 `(tenantId, commandType, idempotencyKey)` 去重；Outbox 使用稳定 `eventId`、Inbox 使用 `(eventId, consumer)`。申请、命令、Saga 和 Outbox 在同一 MySQL 事务；订单取消适配必须在调用前后验证租户、订单所属会员、状态和申请状态。只信任 Gateway 注入的 MEMBER/STAFF、授权快照、服务 JWT；审计不记录 Token、支付详情或完整地址。
+以 `commandId` 及 `(tenantId, commandType, idempotencyKey)` 去重；Outbox 使用稳定 `eventId`、Inbox 使用 `(eventId, consumer)`。申请、命令、Saga 和 Outbox 在同一 MySQL 事务；订单取消适配必须调用 `OrderTenantResolver` 并令解析租户与可信上下文相等，再验证订单所属会员、状态和申请状态。`OmsOrder` 无 tenant 字段，禁止从会员 ID、订单用户名、`mall-default` 或 payload 推断。未绑定订单报 `ORDER_TENANT_MISMATCH` 并审计。只信任 Gateway 注入的 MEMBER/STAFF、授权快照、服务 JWT；审计不记录 Token、支付详情或完整地址。
 
 ## 降级与测试
 
@@ -33,5 +33,5 @@
 ```text
 你负责 P6-A。工作目录 D:\Java\code\AliAgent-worktrees\p6-mall-aftersale-saga，分支 codex/p6-mall-aftersale-saga；先确认分支和工作区干净。完整阅读 docs/tasks/p6/P6-阶段任务边界.md、docs/handoffs/P6-A-mall售后Saga上下文.md、contracts/standards/aftersale-p6.md 及 AGENTS.md。只允许修改 mall/mall-portal/src/main/java/com/macro/mall/portal/aftersale/{api,core,persistence}/ 和对应测试；禁止修改 contracts、POM、YAML、迁移、其它任务目录、既有 mall 核心类和 P5。
 
-先用 CodeGraph 定位调用方和影响面。实现售后申请、审批、未支付取消、Saga 核心和 Outbox/Inbox；复用 OmsPortalOrderService.cancelOrder(Long) 的既有取消事实，绝不把 OmsOrderReturnApply 的完成状态当退款成功。遵守冻结状态机、命令/事件信封、规则创建时固定、命令和事件幂等；创建申请/Saga/Outbox 同一 MySQL 事务。所有身份和租户来自可信头/授权快照，禁止 AI 或调用方伪造。不要实现 RefundPort、权益回滚、通知、人工对账或真实支付。TDD，失败先 systematic-debugging；运行 Maven、diff、Compose 校验，清理 test- 资源，提交 feat(p6-a): add aftersale saga core，并报告 SHA、文件、验证、清理和集成请求。
+先用 CodeGraph 定位调用方和影响面。实现售后申请、审批、未支付取消、Saga 核心和 Outbox/Inbox；复用 OmsPortalOrderService.cancelOrder(Long) 的既有取消事实，绝不把 OmsOrderReturnApply 的完成状态当退款成功。遵守冻结状态机、命令/事件信封、规则创建时固定、命令和事件幂等；创建申请/Saga/Outbox 同一 MySQL 事务。订单租户必须经 OrderTenantResolver 从 order_tenant_binding 解析且与可信头相等；无绑定或不匹配即拒绝审计，禁止从会员、用户名、mall-default 或 payload 推断。不要实现 RefundPort、权益回滚、通知、人工对账或真实支付。TDD，失败先 systematic-debugging；运行 Maven、diff、Compose 校验，清理 test- 资源，提交 feat(p6-a): add aftersale saga core，并报告 SHA、文件、验证、清理和集成请求。
 ```
