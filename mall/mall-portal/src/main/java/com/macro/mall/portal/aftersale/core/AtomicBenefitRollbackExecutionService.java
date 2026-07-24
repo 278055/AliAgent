@@ -29,11 +29,17 @@ public final class AtomicBenefitRollbackExecutionService implements BenefitRollb
         if (!context.isStaff()) throw new SecurityException("service benefit execution requires staff context");
         AfterSaleView afterSaleCase = repository.findById(context.tenantId(), caseId).orElseThrow(() -> new SecurityException("after-sale case not found"));
         if (afterSaleCase.status() != AfterSaleStatus.EXECUTING && afterSaleCase.status() != AfterSaleStatus.RETRY_PENDING) throw new IllegalStateException("benefit rollback is not executable");
-        if (!repository.claimSagaStep(caseId, stepType, idempotencyKey)) return new StepResult(repository.sagaStepStatus(caseId, stepType, idempotencyKey), "idempotent replay");
+        if (!isSupportedStep(stepType)) throw new IllegalArgumentException("unsupported benefit step");
+        if (!repository.refundSucceeded(caseId)) throw new IllegalStateException("refund must succeed before benefit rollback");
+        if (!repository.claimSagaStep(caseId, stepType, idempotencyKey)) {
+            String status = repository.sagaStepStatus(caseId, stepType, idempotencyKey);
+            if ("UNKNOWN".equals(status)) throw new IllegalStateException("saga step idempotency conflict");
+            return new StepResult(status, "idempotent replay");
+        }
         try {
-            StepResult result = invoke(stepType, new BenefitRollbackCommand(caseId, context.tenantId(), idempotencyKey));
+            StepResult result = invoke(stepType, repository.loadTrustedBenefitCommand(context.tenantId(), caseId, idempotencyKey));
             if (!"SUCCEEDED".equals(result.status())) return failed(context, caseId, stepType, idempotencyKey, result.detail());
-            repository.updateSagaStep(caseId, stepType, "SUCCEEDED", idempotencyKey, null);
+            repository.completeClaimedSagaStep(caseId, stepType, "SUCCEEDED", idempotencyKey, null);
             repository.updateSaga(caseId, "RUNNING", stepType);
             repository.audit(caseId, context, "BENEFIT_" + stepType + "_SUCCEEDED", null);
             return result;
@@ -46,11 +52,15 @@ public final class AtomicBenefitRollbackExecutionService implements BenefitRollb
         if ("STOCK_RESTORED".equals(stepType)) return benefits.restoreStock(command);
         if ("COUPON_RESTORED".equals(stepType)) return benefits.restoreCoupon(command);
         if ("POINTS_RESTORED".equals(stepType)) return benefits.restorePoints(command);
-        throw new IllegalArgumentException("unsupported benefit step");
+        throw new IllegalStateException("unsupported benefit step");
+    }
+
+    private boolean isSupportedStep(String stepType) {
+        return "STOCK_RESTORED".equals(stepType) || "COUPON_RESTORED".equals(stepType) || "POINTS_RESTORED".equals(stepType);
     }
 
     private StepResult failed(TrustedAfterSaleContext context, Long caseId, String stepType, String idempotencyKey, String detail) {
-        repository.updateSagaStep(caseId, stepType, "FAILED", idempotencyKey, detail);
+        repository.completeClaimedSagaStep(caseId, stepType, "FAILED", idempotencyKey, detail);
         repository.updateStatus(caseId, AfterSaleStatus.MANUAL_RECONCILIATION);
         repository.updateSaga(caseId, "MANUAL_RECONCILIATION", "MANUAL_RECONCILIATION");
         // 必须保留退款成功事实，不执行任何反向退款；事件按冻结顺序写入同一 Outbox 事务。

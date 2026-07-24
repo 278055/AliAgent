@@ -14,6 +14,13 @@ import com.macro.mall.portal.aftersale.api.RefundPort;
 import com.macro.mall.portal.aftersale.api.SagaStepReport;
 import com.macro.mall.portal.aftersale.api.ManualReconciliationCommand;
 import com.macro.mall.portal.aftersale.api.BenefitRollbackExecutionPort;
+import com.macro.mall.portal.aftersale.api.AfterSaleView;
+import com.macro.mall.portal.aftersale.api.StepResult;
+import com.macro.mall.portal.aftersale.api.TrustedAfterSaleContext;
+import com.macro.mall.portal.aftersale.api.BenefitRollbackCommand;
+import com.macro.mall.portal.aftersale.api.StockRollbackItem;
+import com.macro.mall.portal.aftersale.core.AtomicBenefitRollbackExecutionService;
+import com.macro.mall.portal.aftersale.persistence.AfterSaleJdbcRepository;
 import com.macro.mall.portal.service.OmsPortalOrderService;
 import com.macro.mall.mapper.OmsOrderMapper;
 import com.macro.mall.model.OmsOrder;
@@ -30,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -184,5 +192,74 @@ class AfterSaleServiceTest {
     void 原子权益执行端口只暴露受控执行入口() {
         assertEquals(1, BenefitRollbackExecutionPort.class.getDeclaredMethods().length);
         assertEquals("execute", BenefitRollbackExecutionPort.class.getDeclaredMethods()[0].getName());
+    }
+
+    @Test
+    void 未记录退款成功事实时不得执行权益回滚() {
+        AfterSaleJdbcRepository repository = mock(AfterSaleJdbcRepository.class);
+        BenefitRollbackPort benefits = mock(BenefitRollbackPort.class);
+        AtomicBenefitRollbackExecutionService service = new AtomicBenefitRollbackExecutionService(repository, benefits);
+        TrustedAfterSaleContext context = new TrustedAfterSaleContext("test-tenant", 99L, "STAFF", "test-auth", "test-trace", "test-request");
+        when(repository.findById("test-tenant", 201L)).thenReturn(java.util.Optional.of(new AfterSaleView(201L, 301L, "test-case-201", "test-rules-v1", AfterSaleStatus.EXECUTING, new BigDecimal("1.00"))));
+
+        assertThrows(IllegalStateException.class, () -> service.execute(context, 201L, "STOCK_RESTORED", "test-stock-key"));
+
+        verify(benefits, org.mockito.Mockito.never()).restoreStock(any());
+    }
+
+    @Test
+    void 权益服务只接收售后解析的完整可信事实() {
+        AfterSaleJdbcRepository repository = mock(AfterSaleJdbcRepository.class);
+        BenefitRollbackPort benefits = mock(BenefitRollbackPort.class);
+        AtomicBenefitRollbackExecutionService service = new AtomicBenefitRollbackExecutionService(repository, benefits);
+        TrustedAfterSaleContext context = new TrustedAfterSaleContext("test-tenant", 99L, "STAFF", "test-auth", "test-trace", "test-request");
+        BenefitRollbackCommand facts = new BenefitRollbackCommand(202L, "test-tenant", "test-stock-key", 302L, 10L,
+                Arrays.asList(new StockRollbackItem(401L, 501L, 2), new StockRollbackItem(402L, 502L, 1)), 601L, 77);
+        when(repository.findById("test-tenant", 202L)).thenReturn(java.util.Optional.of(new AfterSaleView(202L, 302L, "test-case-202", "test-rules-v1", AfterSaleStatus.EXECUTING, new BigDecimal("1.00"))));
+        when(repository.refundSucceeded(202L)).thenReturn(true);
+        when(repository.claimSagaStep(202L, "STOCK_RESTORED", "test-stock-key")).thenReturn(true);
+        when(repository.loadTrustedBenefitCommand("test-tenant", 202L, "test-stock-key")).thenReturn(facts);
+        when(benefits.restoreStock(facts)).thenReturn(new StepResult("SUCCEEDED", "ok"));
+
+        service.execute(context, 202L, "STOCK_RESTORED", "test-stock-key");
+
+        verify(benefits).restoreStock(facts);
+        verify(repository).completeClaimedSagaStep(202L, "STOCK_RESTORED", "SUCCEEDED", "test-stock-key", null);
+    }
+
+    @Test
+    void 权益失败按冻结顺序写入人工对账事件且不触发退款() {
+        AfterSaleJdbcRepository repository = mock(AfterSaleJdbcRepository.class);
+        BenefitRollbackPort benefits = mock(BenefitRollbackPort.class);
+        AtomicBenefitRollbackExecutionService service = new AtomicBenefitRollbackExecutionService(repository, benefits);
+        TrustedAfterSaleContext context = new TrustedAfterSaleContext("test-tenant", 99L, "STAFF", "test-auth", "test-trace", "test-request");
+        BenefitRollbackCommand facts = new BenefitRollbackCommand(203L, "test-tenant", "test-points-key", 303L, 10L, Collections.emptyList(), null, 0);
+        when(repository.findById("test-tenant", 203L)).thenReturn(java.util.Optional.of(new AfterSaleView(203L, 303L, "test-case-203", "test-rules-v1", AfterSaleStatus.EXECUTING, new BigDecimal("1.00"))));
+        when(repository.refundSucceeded(203L)).thenReturn(true);
+        when(repository.claimSagaStep(203L, "POINTS_RESTORED", "test-points-key")).thenReturn(true);
+        when(repository.loadTrustedBenefitCommand("test-tenant", 203L, "test-points-key")).thenReturn(facts);
+        when(benefits.restorePoints(facts)).thenReturn(new StepResult("FAILED", "sanitized"));
+
+        assertEquals("FAILED", service.execute(context, 203L, "POINTS_RESTORED", "test-points-key").status());
+
+        org.mockito.InOrder ordered = inOrder(repository);
+        ordered.verify(repository).outbox(eq(203L), eq(context), any(String.class), eq("BenefitRollbackFailed"));
+        ordered.verify(repository).outbox(eq(203L), eq(context), any(String.class), eq("ManualReconciliationRequired"));
+        verify(repository).updateStatus(203L, AfterSaleStatus.MANUAL_RECONCILIATION);
+    }
+
+    @Test
+    void 不同幂等键不得占有相同步骤() {
+        AfterSaleJdbcRepository repository = mock(AfterSaleJdbcRepository.class);
+        BenefitRollbackPort benefits = mock(BenefitRollbackPort.class);
+        AtomicBenefitRollbackExecutionService service = new AtomicBenefitRollbackExecutionService(repository, benefits);
+        TrustedAfterSaleContext context = new TrustedAfterSaleContext("test-tenant", 99L, "STAFF", "test-auth", "test-trace", "test-request");
+        when(repository.findById("test-tenant", 204L)).thenReturn(java.util.Optional.of(new AfterSaleView(204L, 304L, "test-case-204", "test-rules-v1", AfterSaleStatus.EXECUTING, new BigDecimal("1.00"))));
+        when(repository.refundSucceeded(204L)).thenReturn(true);
+        when(repository.sagaStepStatus(204L, "COUPON_RESTORED", "test-other-key")).thenReturn("UNKNOWN");
+
+        assertThrows(IllegalStateException.class, () -> service.execute(context, 204L, "COUPON_RESTORED", "test-other-key"));
+
+        verify(benefits, org.mockito.Mockito.never()).restoreCoupon(any());
     }
 }
