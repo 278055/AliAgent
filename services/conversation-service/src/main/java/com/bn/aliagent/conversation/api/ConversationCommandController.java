@@ -28,6 +28,7 @@ public class ConversationCommandController {
     }
     @PostMapping("/{id}/human-messages") public Map<String, Object> staffMessage(@PathVariable UUID id, @RequestBody SubmitStaffMessage body, HttpServletRequest request) { return ok(messageView(service.submitStaffMessage(TrustedConversationRequestContext.from(request), id, body.content(), body.clientMessageId()))); }
     @PostMapping("/{id}/takeover") public Map<String, Object> takeOver(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.takeOver(TrustedConversationRequestContext.from(request), id))); }
+    @PostMapping("/{id}/human-request") public Map<String, Object> requestHuman(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.requestHuman(TrustedConversationRequestContext.from(request), id))); }
     @PostMapping("/{id}/release") public Map<String, Object> release(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.release(TrustedConversationRequestContext.from(request), id))); }
     private ConversationView view(ConversationModels.Conversation value) { return new ConversationView(value.id(), value.title(), value.status(), value.pinned()); }
     private MessageView messageView(ConversationModels.Message value) { return new MessageView(value.id(), value.sequence(), value.content(), value.status(), value.requestId()); }

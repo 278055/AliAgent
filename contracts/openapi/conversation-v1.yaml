@@ -18,6 +18,8 @@ paths:
     post: {summary: STAFF 提交公共人工消息, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
   /api/v1/conversations/{conversationId}/takeover:
     post: {summary: STAFF 接管会话, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
+  /api/v1/conversations/{conversationId}/human-request:
+    post: {summary: MEMBER 请求人工服务并进入 WAITING_HUMAN 队列, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
   /api/v1/conversations/{conversationId}/release:
     post: {summary: STAFF 释放会话, parameters: [{$ref: '#/components/parameters/Context'}, {$ref: '#/components/parameters/ConversationId'}], responses: {'200': {description: 成功}}}
 components:

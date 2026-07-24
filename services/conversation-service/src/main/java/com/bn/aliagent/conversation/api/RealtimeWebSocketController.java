@@ -69,7 +69,13 @@ public final class RealtimeWebSocketController extends Endpoint {
             JsonNode event = json.readTree(payload);
             String type = event.path("eventType").asText();
             conversationId = UUID.fromString(event.path("conversationId").asText());
-            if ("human.send".equals(type)) {
+            if ("human.request".equals(type)) {
+                var conversation = conversations.requestHuman(context, conversationId);
+                realtime.register(new RealtimeConnection(context.tenantId(), conversationId, connectionId, realtime.instanceId()));
+                state.connected(new RealtimeConnection(context.tenantId(), conversationId, connectionId, realtime.instanceId()));
+                state.updateHumanState(context.tenantId(), conversationId, null, conversation.status());
+                if (!realtime.deliver(RealtimeEnvelope.queue(context.tenantId(), conversationId, context.requestId())).delivered()) sendError(session, context, conversationId, "SYSTEM-503-REDIS", "Queue state persisted; reconnect and replay");
+            } else if ("human.send".equals(type)) {
                 ConversationModels.Message message = conversations.submitStaffMessage(context, conversationId, event.path("content").asText(), UUID.fromString(event.path("clientMessageId").asText()));
                 realtime.register(new RealtimeConnection(context.tenantId(), conversationId, connectionId, realtime.instanceId()));
                 state.connected(new RealtimeConnection(context.tenantId(), conversationId, connectionId, realtime.instanceId()));

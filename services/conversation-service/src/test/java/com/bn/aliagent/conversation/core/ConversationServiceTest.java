@@ -62,6 +62,18 @@ class ConversationServiceTest {
         assertEquals(1, first.sequence());
     }
 
+    @Test
+    void memberHumanRequestTransitionsToWaitingHuman() {
+        UUID conversationId = UUID.randomUUID();
+        InMemoryRepository repository = new InMemoryRepository(conversationId);
+        ConversationService service = new ConversationService(repository);
+        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-subject", "MEMBER", UUID.randomUUID().toString(), UUID.randomUUID());
+
+        Conversation waiting = service.requestHuman(context, conversationId);
+
+        assertEquals("WAITING_HUMAN", waiting.status());
+    }
+
     private static final class InMemoryRepository implements ConversationRepository {
         private final Conversation conversation;
         private final List<Message> messages = new ArrayList<>();

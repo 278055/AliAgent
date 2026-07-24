@@ -27,4 +27,13 @@ class RealtimeEnvelopeTest {
         assertFalse(payload.contains("connectionId"));
         assertEquals("HUMAN_ACTIVE", new com.fasterxml.jackson.databind.ObjectMapper().readTree(payload).path("status").asText());
     }
+
+    @Test
+    void queueEnvelopePublishesWaitingHumanSemantics() throws Exception {
+        RealtimeEnvelope envelope = RealtimeEnvelope.queue("test-p4-c-tenant", UUID.randomUUID(), UUID.randomUUID());
+
+        var payload = new com.fasterxml.jackson.databind.ObjectMapper().readTree(envelope.publicJson());
+        assertEquals("conversation.queue", payload.path("eventType").asText());
+        assertEquals("WAITING_HUMAN", payload.path("status").asText());
+    }
 }

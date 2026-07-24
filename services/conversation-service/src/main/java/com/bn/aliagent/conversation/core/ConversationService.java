@@ -102,6 +102,15 @@ public class ConversationService {
     }
 
     @Transactional
+    public Conversation requestHuman(TrustedConversationRequestContext context, UUID conversationId) {
+        if (!"MEMBER".equals(context.subjectType())) throw new ConversationException("AUTH-403-001", "Only MEMBER can request human service");
+        Conversation current = owned(context, conversationId);
+        if (!current.ownerSubjectId().equals(context.subjectId())) throw new ConversationException("TENANT-403-001", "Conversation is not owned by the caller");
+        if ("CLOSED".equals(current.status())) throw new ConversationException("CONV-409-001", "Closed conversation cannot enter human queue");
+        return transition(context, conversationId, "WAITING_HUMAN");
+    }
+
+    @Transactional
     public Conversation release(TrustedConversationRequestContext context, UUID conversationId) {
         ConversationPolicy.requireStaff(context.subjectType());
         return transition(context, conversationId, "AI_ACTIVE");

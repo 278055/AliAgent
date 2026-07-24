@@ -28,6 +28,11 @@ public record RealtimeEnvelope(String eventType, String tenantId, UUID conversat
                 0, null, null, null, null, null, status);
     }
 
+    public static RealtimeEnvelope queue(String tenantId, UUID conversationId, UUID requestId) {
+        return new RealtimeEnvelope("conversation.queue", tenantId, conversationId, requestId, Instant.now(), null,
+                0, null, null, null, null, null, "WAITING_HUMAN");
+    }
+
     public String publicJson() {
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("eventType", eventType);
