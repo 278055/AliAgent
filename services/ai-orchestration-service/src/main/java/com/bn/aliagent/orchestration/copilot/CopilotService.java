@@ -24,33 +24,39 @@ public final class CopilotService {
     public int modelCalls() { return modelCalls; }
     public void accept(CopilotModels.SuggestionRequested event) {
         if (!repository.claimInbox(event.eventId())) return;
-        generate(event.command());
-        repository.completeInbox(event.eventId());
+        try {
+            generate(event.command());
+            repository.completeInbox(event.eventId());
+        } catch (RuntimeException failure) {
+            generateFailed(event.command());
+            repository.completeInbox(event.eventId());
+        }
     }
     public CopilotModels.Suggestion generate(CopilotModels.GenerateCommand command) {
         var existing = repository.findByRequestId(command.requestId());
         if (existing.isPresent()) return existing.get();
         var conversation = conversations.load(command.tenantId(), command.conversationId());
+        if (!command.tenantId().equals(conversation.tenantId()) || !command.conversationId().equals(conversation.conversationId())) throw new CopilotException("会话上下文不属于当前租户");
         if (!"HUMAN_ACTIVE".equals(conversation.collaborationState()) || !command.assignedAgentId().equals(command.currentAgentId())
                 || !command.assignedAgentId().equals(conversation.assignedAgentId())) throw new CopilotException("当前客服未接管该会话");
         try {
             List<CopilotModels.Citation> citations = knowledge.retrieve(command.tenantId(), command.conversationId());
             var context = new CopilotModels.PromptContext(conversation, citations, commerce.read(command.tenantId(), command.conversationId()), afterSale.read(command.tenantId(), command.conversationId()));
             modelCalls++;
-            var generated = create(command, CopilotModels.SuggestionStatus.GENERATED, model.generate(prompts.create(context), context), citations);
+            var generated = create(command, CopilotModels.SuggestionStatus.GENERATED, sanitizeModelOutput(model.generate(prompts.create(context), context)), citations);
             repository.save(generated, command.requestId()); return generated;
-        } catch (CopilotException dependencyFailure) {
-            var failed = create(command, CopilotModels.SuggestionStatus.FAILED_RETRYABLE, "", List.of());
-            repository.save(failed, command.requestId()); return failed;
-        }
+        } catch (RuntimeException dependencyFailure) { return generateFailed(command); }
     }
     public CopilotModels.Action accept(CopilotModels.ActionCommand command) { return act(command, CopilotModels.ActionType.ACCEPTED, null); }
     public CopilotModels.Action modifyAndSend(CopilotModels.ActionCommand command) { return act(command, CopilotModels.ActionType.MODIFIED, command.content()); }
     public CopilotModels.Action ignore(CopilotModels.ActionCommand command) { return act(command, CopilotModels.ActionType.IGNORED, null); }
-    private CopilotModels.Action act(CopilotModels.ActionCommand command, CopilotModels.ActionType type, String edited) {
+    private synchronized CopilotModels.Action act(CopilotModels.ActionCommand command, CopilotModels.ActionType type, String edited) {
         var old = repository.findAction(command.requestId()); if (old.isPresent()) return old.get();
         var suggestion = repository.findSuggestion(command.suggestionId()).orElseThrow(() -> new CopilotException("建议不存在"));
         if (!suggestion.tenantId().equals(command.tenantId()) || !suggestion.assignedAgentId().equals(command.agentId()) || suggestion.status() != CopilotModels.SuggestionStatus.GENERATED) throw new CopilotException("建议不可操作");
+        var conversation = conversations.load(command.tenantId(), suggestion.conversationId());
+        if (!command.tenantId().equals(conversation.tenantId()) || !suggestion.conversationId().equals(conversation.conversationId())
+                || !"HUMAN_ACTIVE".equals(conversation.collaborationState()) || !command.agentId().equals(conversation.assignedAgentId())) throw new CopilotException("当前客服未接管该会话");
         var finalContent = type == CopilotModels.ActionType.MODIFIED ? edited : suggestion.originalContent();
         var diff = type == CopilotModels.ActionType.MODIFIED ? "内容已由客服编辑" : "";
         if (type != CopilotModels.ActionType.IGNORED) messages.send(command.tenantId(), suggestion.conversationId(), command.agentId(), finalContent, command.requestId());
@@ -62,5 +68,18 @@ public final class CopilotService {
     }
     private CopilotModels.Suggestion create(CopilotModels.GenerateCommand c, CopilotModels.SuggestionStatus status, String content, List<CopilotModels.Citation> citations) {
         return new CopilotModels.Suggestion(UUID.randomUUID(), c.tenantId(), c.conversationId(), c.triggerMessageId(), c.assignedAgentId(), c.refreshNo(), CopilotModels.Visibility.PRIVATE, status, content, "", "", c.modelVersion(), c.promptVersion(), c.workflowVersion(), citations, Instant.now());
+    }
+    private CopilotModels.Suggestion generateFailed(CopilotModels.GenerateCommand command) {
+        var existing = repository.findByRequestId(command.requestId());
+        if (existing.isPresent()) return existing.get();
+        var failed = create(command, CopilotModels.SuggestionStatus.FAILED_RETRYABLE, "", List.of());
+        repository.save(failed, command.requestId());
+        return failed;
+    }
+    private String sanitizeModelOutput(String content) {
+        if (content == null) throw new CopilotException("模型未返回建议");
+        String sanitized = content.replaceAll("(?is)<think>.*?</think>", "").replaceAll("(?im)^\s*(思维过程|推理过程|reasoning)\s*[:：].*$", "").trim();
+        if (sanitized.isBlank() || sanitized.contains("<think>")) throw new CopilotException("模型输出包含不可持久化内容");
+        return sanitized;
     }
 }
