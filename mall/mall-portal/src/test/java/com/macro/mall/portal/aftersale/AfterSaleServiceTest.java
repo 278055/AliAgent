@@ -13,6 +13,7 @@ import com.macro.mall.portal.aftersale.api.NotificationPort;
 import com.macro.mall.portal.aftersale.api.RefundPort;
 import com.macro.mall.portal.aftersale.api.SagaStepReport;
 import com.macro.mall.portal.aftersale.api.ManualReconciliationCommand;
+import com.macro.mall.portal.aftersale.api.BenefitRollbackExecutionPort;
 import com.macro.mall.portal.service.OmsPortalOrderService;
 import com.macro.mall.mapper.OmsOrderMapper;
 import com.macro.mall.model.OmsOrder;
@@ -177,5 +178,11 @@ class AfterSaleServiceTest {
         ManualReconciliationCommand command = new ManualReconciliationCommand("test-command-18", "test-key-18", "COMPLETED");
         assertEquals("test-step-key", report.idempotencyKey());
         assertEquals("test-command-18", command.commandId());
+    }
+
+    @Test
+    void 原子权益执行端口只暴露受控执行入口() {
+        assertEquals(1, BenefitRollbackExecutionPort.class.getDeclaredMethods().length);
+        assertEquals("execute", BenefitRollbackExecutionPort.class.getDeclaredMethods()[0].getName());
     }
 }

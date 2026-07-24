@@ -38,6 +38,13 @@ public class AfterSaleJdbcRepository {
     }
     public void insertSagaStep(long sagaId, String step, String key) { jdbc.update("INSERT INTO after_sale_saga_step(saga_id,step_type,status,idempotency_key) VALUES (?,?,?,?)", sagaId, step, "PENDING", key); }
     public void ensureSagaStep(long caseId, String step, String idempotencyKey) { jdbc.update("INSERT IGNORE INTO after_sale_saga_step(saga_id,step_type,status,idempotency_key) SELECT id, ?, 'PENDING', ? FROM after_sale_saga WHERE case_id=?", step, idempotencyKey, caseId); }
+    public boolean claimSagaStep(long caseId, String step, String idempotencyKey) {
+        ensureSagaStep(caseId, step, idempotencyKey);
+        return jdbc.update("UPDATE after_sale_saga_step s JOIN after_sale_saga g ON s.saga_id=g.id SET s.status='PROCESSING', s.started_at=CURRENT_TIMESTAMP(6), s.attempt_count=s.attempt_count+1 WHERE g.case_id=? AND s.step_type=? AND s.idempotency_key=? AND s.status='PENDING'", caseId, step, idempotencyKey) == 1;
+    }
+    public String sagaStepStatus(long caseId, String step, String idempotencyKey) {
+        return jdbc.query("SELECT s.status FROM after_sale_saga_step s JOIN after_sale_saga g ON s.saga_id=g.id WHERE g.case_id=? AND s.step_type=? AND s.idempotency_key=?", new Object[]{caseId, step, idempotencyKey}, (result, row) -> result.getString(1)).stream().findFirst().orElse("UNKNOWN");
+    }
     public boolean updateSagaStep(long caseId, String step, String status, String idempotencyKey, String error) {
         return jdbc.update("UPDATE after_sale_saga_step s JOIN after_sale_saga g ON s.saga_id=g.id SET s.status=?, s.error_message=?, s.completed_at=CASE WHEN ?='SUCCEEDED' THEN CURRENT_TIMESTAMP(6) ELSE s.completed_at END, s.attempt_count=s.attempt_count+1 WHERE g.case_id=? AND s.step_type=? AND s.idempotency_key=?", status, error, status, caseId, step, idempotencyKey) == 1;
     }
