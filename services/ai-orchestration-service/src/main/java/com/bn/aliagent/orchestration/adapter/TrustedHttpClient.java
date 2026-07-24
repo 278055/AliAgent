@@ -25,7 +25,7 @@ public final class TrustedHttpClient {
         if (serviceJwt == null || serviceJwt.isBlank()) throw new AdapterException(AdapterException.Category.CONFIGURATION, "service JWT is not configured");
         for (int attempt = 1; attempt <= attempts; attempt++) try {
             HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMillis(timeoutMs))
-                    .header("Authorization", "Bearer " + serviceJwt).header("X-Tenant-Id", context.tenantId())
+                    .header("Authorization", "Bearer " + serviceJwt).header("X-Service-Authorization", "Bearer " + serviceJwt).header("X-Tenant-Id", context.tenantId())
                     .header("X-Subject-Id", context.subjectId()).header("X-Subject-Type", context.subjectType())
                     .header("X-User-Roles", join(context.roles())).header("X-User-Permissions", join(context.permissions()))
                     .header("X-Trace-Id", context.traceId()).header("X-Authorization-Snapshot-Id", context.authorizationSnapshotId().toString())
