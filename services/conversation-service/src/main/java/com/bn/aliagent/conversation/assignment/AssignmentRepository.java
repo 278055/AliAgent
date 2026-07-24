@@ -9,5 +9,8 @@ public interface AssignmentRepository {
     void saveOffer(AssignmentModels.Offer offer);
     Optional<AssignmentModels.Takeover> activeTakeover(String tenantId, UUID conversationId);
     AssignmentModels.Takeover createTakeoverIfAbsent(AssignmentModels.Takeover takeover);
+    int activeTakeoversForStaff(String tenantId, String staffId);
+    Optional<AssignmentModels.AssignmentResult> findResult(String tenantId, UUID requestId);
+    void saveResult(String tenantId, UUID requestId, AssignmentModels.AssignmentResult result);
     List<AssignmentModels.Offer> offersFor(String tenantId, UUID queueItemId);
 }
