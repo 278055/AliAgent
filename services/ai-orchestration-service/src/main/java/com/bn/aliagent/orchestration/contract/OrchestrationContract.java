@@ -17,7 +17,8 @@ public final class OrchestrationContract {
 
     public record ExecutionContext(String tenantId, String subjectId, String subjectType, List<String> roles,
                                    List<String> permissions, String traceId, UUID requestId, UUID conversationId,
-                                   UUID messageId, UUID generationId, UUID authorizationSnapshotId) { }
+                                   UUID sourceMessageId, UUID replyMessageId, UUID generationId,
+                                   UUID authorizationSnapshotId) { }
     public record ReplyRequest(UUID eventId, int eventVersion, ExecutionContext context, Instant occurredAt) { }
     public record Citation(UUID documentId, UUID versionId, UUID chunkId, String content, double score) { }
     public record StreamChunk(UUID messageId, UUID generationId, int chunkIndex, String content, boolean completed,

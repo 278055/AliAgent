@@ -1,10 +1,10 @@
 asyncapi: 3.0.0
 info:
   title: AliAgent AI Reply Requested Event
-  version: 1.0.0
+  version: 2.0.0
 channels:
-  ai.reply.requested.v1:
-    address: ai.reply.requested.v1
+  ai.reply.requested.v2:
+    address: ai.reply.requested.v2
     messages:
       AIReplyRequested:
         $ref: '#/components/messages/AIReplyRequested'
@@ -12,9 +12,9 @@ operations:
   publishAIReplyRequested:
     action: send
     channel:
-      $ref: '#/channels/ai.reply.requested.v1'
+      $ref: '#/channels/ai.reply.requested.v2'
     messages:
-      - $ref: '#/channels/ai.reply.requested.v1/messages/AIReplyRequested'
+      - $ref: '#/channels/ai.reply.requested.v2/messages/AIReplyRequested'
 components:
   messages:
     AIReplyRequested:
@@ -22,7 +22,7 @@ components:
       contentType: application/json
       payload:
         allOf:
-          - $ref: ../json-schema/event-envelope-v1.schema.json
+          - $ref: ../json-schema/event-envelope-v2.schema.json
           - type: object
             properties:
               eventType:
@@ -30,4 +30,4 @@ components:
               producer:
                 const: conversation-service
               payload:
-                $ref: ../json-schema/ai-reply-requested-v1.schema.json
+                $ref: ../json-schema/ai-reply-requested-v2.schema.json

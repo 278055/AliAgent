@@ -64,20 +64,23 @@ public class ConversationService {
         if (!conversation.ownerSubjectId().equals(context.subjectId())) {
             throw new ConversationException("TENANT-403-001", "Conversation is not owned by the caller");
         }
-        Message userMessage = repository.findUserMessage(context.tenantId(), context.subjectId(), conversationId, requestId).orElseGet(() -> {
-            Message message = repository.appendUserMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
-                    0, "USER", "TEXT", "PRIVATE", content, "SUBMITTED", requestId, "{}", Instant.now()), context.subjectId());
-            repository.enqueue(new ReplyRequest(UUID.randomUUID(), context.tenantId(), conversationId, message.id(), requestId,
-                    context.traceId(), Instant.now()));
-            return message;
-        });
+        Message userMessage = repository.findUserMessage(context.tenantId(), context.subjectId(), conversationId, requestId).orElse(null);
+        if (userMessage != null) {
+            Message aiMessage = repository.findAiGeneration(context.tenantId(), conversationId, requestId).orElseThrow();
+            return new ConversationModels.Generation(generationId(aiMessage), userMessage, aiMessage);
+        }
+        userMessage = repository.appendUserMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
+                0, "USER", "TEXT", "PRIVATE", content, "SUBMITTED", requestId, "{}", Instant.now()), context.subjectId());
         Message aiMessage = repository.findAiGeneration(context.tenantId(), conversationId, requestId).orElseGet(() -> {
             UUID generationId = UUID.randomUUID();
             return repository.appendAiStreamingMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
                     0, "AI", "TEXT", "PUBLIC", "", "STREAMING", requestId,
                     "{\"generationId\":\"" + generationId + "\"}", Instant.now()), generationId);
         });
-        return new ConversationModels.Generation(generationId(aiMessage), userMessage, aiMessage);
+        UUID generationId = generationId(aiMessage);
+        repository.enqueue(new ReplyRequest(UUID.randomUUID(), 2, context.tenantId(), conversationId, userMessage.id(),
+                aiMessage.id(), generationId, requestId, context.traceId(), Instant.now()));
+        return new ConversationModels.Generation(generationId, userMessage, aiMessage);
     }
 
     public java.util.Optional<Message> findGeneration(String tenantId, UUID conversationId, UUID requestId) {

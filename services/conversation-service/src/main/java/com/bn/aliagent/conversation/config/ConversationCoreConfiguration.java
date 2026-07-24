@@ -13,11 +13,14 @@ import org.springframework.context.annotation.Profile;
 @Profile("database")
 public class ConversationCoreConfiguration {
     @Bean
-    Queue aiReplyRequestedQueue() { return new Queue("ai.reply.requested.v1", true); }
+    Queue aiReplyRequestedV1Queue() { return new Queue("ai.reply.requested.v1", true); }
+
+    @Bean
+    Queue aiReplyRequestedV2Queue() { return new Queue("ai.reply.requested.v2", true); }
 
     @Bean
     AIReplyRequestedPublisher aiReplyRequestedPublisher(RabbitTemplate rabbit) {
-        return request -> rabbit.convertAndSend("ai.reply.requested.v1", request);
+        return request -> rabbit.convertAndSend("ai.reply.requested.v" + request.eventVersion(), request);
     }
 
     @Bean
