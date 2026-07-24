@@ -8,6 +8,11 @@ channels:
     messages:
       AIReplyRequested:
         $ref: '#/components/messages/AIReplyRequested'
+  ai.reply.requested.v2:
+    address: ai.reply.requested.v2
+    messages:
+      AIReplyRequestedV2:
+        $ref: '#/components/messages/AIReplyRequestedV2'
 operations:
   publishAIReplyRequested:
     action: send
@@ -15,6 +20,12 @@ operations:
       $ref: '#/channels/ai.reply.requested.v1'
     messages:
       - $ref: '#/channels/ai.reply.requested.v1/messages/AIReplyRequested'
+  publishAIReplyRequestedV2:
+    action: send
+    channel:
+      $ref: '#/channels/ai.reply.requested.v2'
+    messages:
+      - $ref: '#/channels/ai.reply.requested.v2/messages/AIReplyRequestedV2'
 components:
   messages:
     AIReplyRequested:
@@ -31,3 +42,19 @@ components:
                 const: conversation-service
               payload:
                 $ref: ../json-schema/ai-reply-requested-v1.schema.json
+    AIReplyRequestedV2:
+      name: AIReplyRequestedV2
+      contentType: application/json
+      payload:
+        allOf:
+          - $ref: ../json-schema/event-envelope-v1.schema.json
+          - type: object
+            properties:
+              eventType:
+                const: AIReplyRequested
+              eventVersion:
+                const: 2
+              producer:
+                const: conversation-service
+              payload:
+                $ref: ../json-schema/ai-reply-requested-v2.schema.json

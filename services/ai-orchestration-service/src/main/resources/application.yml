@@ -18,3 +18,29 @@ nacos:
 logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} service=ai-orchestration-service]"
+orchestration:
+  messaging:
+    ai-reply:
+      v1-queue: ${ORCHESTRATION_AI_REPLY_V1_QUEUE:ai.reply.requested.v1}
+      v2-queue: ${ORCHESTRATION_AI_REPLY_V2_QUEUE:ai.reply.requested.v2}
+  model:
+    provider: ${ORCHESTRATION_MODEL_PROVIDER:mock}
+    dashscope-api-key: ${DASHSCOPE_API_KEY:}
+  clients:
+    knowledge-base-url: ${ORCHESTRATION_KNOWLEDGE_BASE_URL:http://localhost:8083}
+    mall-base-url: ${ORCHESTRATION_MALL_BASE_URL:http://localhost:8080}
+    conversation-base-url: ${ORCHESTRATION_CONVERSATION_BASE_URL:http://localhost:8082}
+  security:
+    service-jwt: ${ORCHESTRATION_SERVICE_JWT:}
+  timeout:
+    connect-ms: ${ORCHESTRATION_CONNECT_TIMEOUT_MS:1000}
+    read-ms: ${ORCHESTRATION_READ_TIMEOUT_MS:3000}
+  retry:
+    max-attempts: ${ORCHESTRATION_RETRY_MAX_ATTEMPTS:2}
+  quota:
+    tenant-per-minute: ${ORCHESTRATION_TENANT_PER_MINUTE:60}
+    tenant-concurrent: ${ORCHESTRATION_TENANT_CONCURRENT:4}
+  resilience:
+    sentinel-enabled: ${ORCHESTRATION_SENTINEL_ENABLED:false}
+  feature:
+    enabled: ${ORCHESTRATION_ENABLED:false}
