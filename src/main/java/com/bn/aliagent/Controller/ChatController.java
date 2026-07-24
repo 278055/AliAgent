@@ -40,8 +40,7 @@ public class ChatController {
 
     @GetMapping("/remote-write-enabled")
     public Map<String, Object> remoteWriteEnabled(HttpServletRequest request) {
-        boolean trusted = Boolean.TRUE.equals(request.getAttribute("com.bn.platform.security.ServiceJwtAuthenticationFilter.verified"));
-        boolean enabled = remoteWritePolicy.enabledForTrustedTenant(request.getHeader("X-Tenant-Id"), trusted);
+        boolean enabled = remoteWritePolicy.enabledForServerTenant();
         return Map.of("enabled", enabled);
     }
 

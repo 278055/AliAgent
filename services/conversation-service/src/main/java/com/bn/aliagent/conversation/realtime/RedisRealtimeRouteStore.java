@@ -14,13 +14,16 @@ import java.util.UUID;
 public final class RedisRealtimeRouteStore implements RealtimeRouteStore {
     private final String host;
     private final int port;
+    private final String password;
     private final int ttlSeconds;
 
-    public RedisRealtimeRouteStore(String host, int port, int ttlSeconds) {
+    public RedisRealtimeRouteStore(String host, int port, String password, int ttlSeconds) {
         this.host = host;
         this.port = port;
+        this.password = password;
         this.ttlSeconds = ttlSeconds;
     }
+    public RedisRealtimeRouteStore(String host, int port, int ttlSeconds) { this(host, port, "", ttlSeconds); }
 
     @Override public void bind(RealtimeConnection connection) {
         String connectionKey = connectionKey(connection.tenantId(), connection.connectionId());
@@ -55,12 +58,13 @@ public final class RedisRealtimeRouteStore implements RealtimeRouteStore {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), 1000); socket.setSoTimeout(1000);
             BufferedWriter output = new BufferedWriter(new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
-            output.write("*" + parts.length + "\r\n");
-            for (String part : parts) output.write("$" + part.getBytes(StandardCharsets.UTF_8).length + "\r\n" + part + "\r\n");
-            output.flush();
-            return RedisReply.read(new BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8)));
+            BufferedReader input = new BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            if (password != null && !password.isBlank()) { write(output, "AUTH", password); RedisReply.read(input); }
+            write(output, parts);
+            return RedisReply.read(input);
         } catch (IOException exception) { throw new IllegalStateException("Redis unavailable", exception); }
     }
+    private void write(BufferedWriter output, String... parts) throws IOException { output.write("*" + parts.length + "\r\n"); for (String part : parts) output.write("$" + part.getBytes(StandardCharsets.UTF_8).length + "\r\n" + part + "\r\n"); output.flush(); }
 
     private record RedisReply(String single, List<String> array) {
         static RedisReply read(BufferedReader input) throws IOException {

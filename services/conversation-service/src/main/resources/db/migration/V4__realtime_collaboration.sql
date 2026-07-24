@@ -16,3 +16,11 @@ CREATE TABLE conversation_human_state (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (tenant_id, conversation_id)
 );
+
+CREATE TABLE conversation_agent_presence (
+    tenant_id VARCHAR(128) NOT NULL,
+    staff_id VARCHAR(128) NOT NULL,
+    status VARCHAR(32) NOT NULL CHECK (status IN ('ONLINE', 'OFFLINE', 'BUSY')),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (tenant_id, staff_id)
+);

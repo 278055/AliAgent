@@ -8,6 +8,8 @@ import com.bn.aliagent.conversation.realtime.RealtimeCollaborationService;
 import com.bn.aliagent.conversation.realtime.RealtimePublisher;
 import com.bn.aliagent.conversation.realtime.RealtimeRouteStore;
 import com.bn.aliagent.conversation.realtime.RealtimeSessionRegistry;
+import com.bn.aliagent.conversation.realtime.RealtimeStateRepository;
+import com.bn.aliagent.conversation.realtime.RealtimeStateService;
 import com.bn.aliagent.conversation.realtime.RedisRealtimePublisher;
 import com.bn.aliagent.conversation.realtime.RedisRealtimeRouteStore;
 import com.bn.platform.security.ServiceJwtSupport;
@@ -27,24 +29,25 @@ import org.springframework.context.annotation.Profile;
 @Profile("database")
 public class RealtimeWebSocketConfiguration {
     @Bean RealtimeSessionRegistry realtimeSessions() { return new RealtimeSessionRegistry(); }
-    @Bean RealtimeRouteStore realtimeRoutes(@Value("${CONVERSATION_REDIS_HOST:localhost}") String host, @Value("${CONVERSATION_REDIS_PORT:6379}") int port) { return new RedisRealtimeRouteStore(host, port, 60); }
-    @Bean RealtimePublisher realtimePublisher(@Value("${CONVERSATION_REDIS_HOST:localhost}") String host, @Value("${CONVERSATION_REDIS_PORT:6379}") int port) { return new RedisRealtimePublisher(host, port); }
+    @Bean RealtimeRouteStore realtimeRoutes(@Value("${CONVERSATION_REDIS_HOST:localhost}") String host, @Value("${CONVERSATION_REDIS_PORT:6379}") int port, @Value("${CONVERSATION_REDIS_PASSWORD:}") String password) { return new RedisRealtimeRouteStore(host, port, password, 60); }
+    @Bean RealtimePublisher realtimePublisher(@Value("${CONVERSATION_REDIS_HOST:localhost}") String host, @Value("${CONVERSATION_REDIS_PORT:6379}") int port, @Value("${CONVERSATION_REDIS_PASSWORD:}") String password) { return new RedisRealtimePublisher(host, port, password); }
+    @Bean RealtimeStateService realtimeStateService(RealtimeStateRepository repository) { return new RealtimeStateService(repository); }
     @Bean RealtimeCollaborationService realtimeCollaborationService(@Value("${CONVERSATION_INSTANCE_ID:conversation-local}") String instanceId, RealtimeRouteStore routes, RealtimePublisher publisher) { return new RealtimeCollaborationService(instanceId, routes, publisher); }
-    @Bean(destroyMethod = "close") RedisRealtimeSubscriber realtimeSubscriber(@Value("${CONVERSATION_REDIS_HOST:localhost}") String host, @Value("${CONVERSATION_REDIS_PORT:6379}") int port, @Value("${CONVERSATION_INSTANCE_ID:conversation-local}") String instanceId, RealtimeSessionRegistry sessions) {
-        RedisRealtimeSubscriber subscriber = new RedisRealtimeSubscriber(host, port, instanceId, sessions); subscriber.start(); return subscriber;
+    @Bean(destroyMethod = "close") RedisRealtimeSubscriber realtimeSubscriber(@Value("${CONVERSATION_REDIS_HOST:localhost}") String host, @Value("${CONVERSATION_REDIS_PORT:6379}") int port, @Value("${CONVERSATION_REDIS_PASSWORD:}") String password, @Value("${CONVERSATION_INSTANCE_ID:conversation-local}") String instanceId, RealtimeSessionRegistry sessions) {
+        return new RedisRealtimeSubscriber(host, port, password, instanceId, sessions);
     }
-    @Bean ServletContextInitializer realtimeWebSocketEndpoint(@Value("${SERVICE_JWT_SECRET:test-service-jwt-secret-must-be-at-least-32-bytes}") String secret, ConversationService conversations, RealtimeCollaborationService realtime, RealtimeSessionRegistry sessions) {
+    @Bean ServletContextInitializer realtimeWebSocketEndpoint(@Value("${SERVICE_JWT_SECRET:test-service-jwt-secret-must-be-at-least-32-bytes}") String secret, ConversationService conversations, RealtimeCollaborationService realtime, RealtimeSessionRegistry sessions, RealtimeStateService state, RedisRealtimeSubscriber subscriber) {
         return servletContext -> {
-            try { register(servletContext, new ServiceJwtSupport(secret), conversations, realtime, sessions); }
+            try { register(servletContext, new ServiceJwtSupport(secret), conversations, realtime, sessions, state, subscriber); }
             catch (Exception exception) { throw new IllegalStateException("Unable to register conversation WebSocket endpoint", exception); }
         };
     }
 
-    private void register(ServletContext servletContext, ServiceJwtSupport jwt, ConversationService conversations, RealtimeCollaborationService realtime, RealtimeSessionRegistry sessions) throws Exception {
+    private void register(ServletContext servletContext, ServiceJwtSupport jwt, ConversationService conversations, RealtimeCollaborationService realtime, RealtimeSessionRegistry sessions, RealtimeStateService state, RedisRealtimeSubscriber subscriber) throws Exception {
         ServerContainer container = (ServerContainer) servletContext.getAttribute(ServerContainer.class.getName());
         ServerEndpointConfig endpoint = ServerEndpointConfig.Builder.create(RealtimeWebSocketController.class, "/api/v1/ws/conversations")
                 .configurator(new ServerEndpointConfig.Configurator() {
-                    @Override public <T> T getEndpointInstance(Class<T> type) { return type.cast(new RealtimeWebSocketController(conversations, realtime, sessions)); }
+                    @Override public <T> T getEndpointInstance(Class<T> type) { return type.cast(new RealtimeWebSocketController(conversations, realtime, sessions, state, subscriber)); }
                     @Override public void modifyHandshake(ServerEndpointConfig config, HandshakeRequest request, jakarta.websocket.HandshakeResponse response) {
                         try {
                             var headers = request.getHeaders();

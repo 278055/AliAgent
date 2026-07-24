@@ -27,6 +27,25 @@ interface RResponse<T> {
   data: T
 }
 
+interface RemoteConversation {
+  id: string
+  title: string
+  status: string
+  pinned: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+interface RemoteMessage {
+  id: string
+  conversationId?: string
+  sequence: number
+  senderType?: 'USER' | 'STAFF' | 'AI' | 'SYSTEM'
+  content: string
+  status: string
+  createdAt?: string
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...options,
@@ -144,6 +163,91 @@ export const api = {
       }
     }
     onDone()
+  },
+
+  async remoteChatStream(
+    message: string,
+    onChunk: (text: string) => void,
+    onDone: (conversationId: string) => void,
+    conversationId?: string,
+  ) {
+    const activeId = conversationId || (await request<RemoteConversation>('/v1/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ title: message.slice(0, 64) }),
+    })).id
+    const requestId = crypto.randomUUID()
+    const accepted = await request<{ message: RemoteMessage; aiMessage: RemoteMessage }>(
+      `/v1/conversations/${activeId}/messages`,
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': requestId },
+        body: JSON.stringify({ content: message, requestId }),
+      },
+    )
+    const res = await fetch(`${BASE}/v1/conversations/${activeId}/stream?afterSequence=${accepted.message.sequence}`, {
+      headers: { ...authHeaders(), Accept: 'text/event-stream' },
+    })
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const blocks = buffer.split('\n\n')
+      buffer = blocks.pop() || ''
+      for (const block of blocks) {
+        const dataLine = block.split('\n').find((line) => line.startsWith('data:'))
+        if (!dataLine) continue
+        const event = JSON.parse(dataLine.slice(5).trim())
+        if (event.eventType === 'message.delta') onChunk(event.delta || '')
+        if (event.eventType === 'message.completed' || event.eventType === 'message.interrupted') {
+          onDone(activeId)
+          return
+        }
+      }
+    }
+    onDone(activeId)
+  },
+
+  getRemoteConversations() {
+    return request<{ items: RemoteConversation[] }>('/v1/conversations').then(({ items }) => items.map((value) => ({
+      id: value.id,
+      title: value.title,
+      createdAt: value.createdAt || new Date().toISOString(),
+      updatedAt: value.updatedAt || value.createdAt || new Date().toISOString(),
+      deleted: 0,
+      pinned: value.pinned ? 1 : 0,
+    })))
+  },
+
+  getRemoteMessages(conversationId: string) {
+    return request<{ items: RemoteMessage[] }>(`/v1/conversations/${conversationId}/messages`).then(({ items }) => items.map((value) => ({
+      id: value.id,
+      conversationId,
+      role: value.senderType === 'USER' || value.senderType === 'STAFF' ? 'user' as const : 'assistant' as const,
+      content: value.content,
+      createdAt: value.createdAt || new Date().toISOString(),
+    })))
+  },
+
+  deleteRemoteConversation(id: string) {
+    return request<void>(`/v1/conversations/${id}`, { method: 'DELETE' })
+  },
+
+  renameRemoteConversation(id: string, title: string) {
+    return request<RemoteConversation>(`/v1/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }).then((): { success: boolean; error?: string } => ({ success: true }))
+  },
+
+  pinRemoteConversation(id: string, pinned: boolean) {
+    return request<RemoteConversation>(`/v1/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pinned }),
+    }).then((value) => ({ pinned: value.pinned }))
   },
 
   // Conversations

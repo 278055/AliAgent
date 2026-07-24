@@ -59,6 +59,7 @@ feature:
     # 默认保留旧 /api/chat/**；只有网关认证的白名单租户可切换远程会话写入。
     remote-write: false
     remote-write-tenants: ""
+    default-tenant: ""
   knowledge:
     remote-read: false
     remote-read-tenants: ""
