@@ -5,6 +5,7 @@ import com.bn.aliagent.entity.Conversation;
 import com.bn.aliagent.entity.Message;
 import com.bn.aliagent.service.ConversationService;
 import com.bn.aliagent.service.MessageService;
+import com.bn.aliagent.conversationcompat.ConversationRemoteWritePolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +13,7 @@ import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 对话接口控制器
@@ -32,6 +34,15 @@ public class ChatController {
 
     @Autowired
     private MessageService messageService;
+
+    @Autowired
+    private ConversationRemoteWritePolicy remoteWritePolicy;
+
+    @GetMapping("/remote-write-enabled")
+    public Map<String, Object> remoteWriteEnabled(HttpServletRequest request) {
+        boolean enabled = remoteWritePolicy.enabledForServerTenant();
+        return Map.of("enabled", enabled);
+    }
 
     /**
      * 流式对话接口（GET 方法，SSE）

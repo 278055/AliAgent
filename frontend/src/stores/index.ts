@@ -36,6 +36,12 @@ const state = reactive({
 
 const toasts = reactive<ToastItem[]>([])
 let toastIdCounter = 0
+let remoteWriteEnabled = false
+
+async function refreshRemoteWriteMode() {
+  remoteWriteEnabled = (await api.remoteWriteEnabled().catch(() => ({ enabled: false }))).enabled
+  return remoteWriteEnabled
+}
 
 function addToast(message: string, type: 'success' | 'error' | 'info' = 'info', duration = 3000) {
   const id = ++toastIdCounter
@@ -68,7 +74,8 @@ const currentConversation = computed(() =>
 
 async function loadConversations() {
   try {
-    state.conversations = await api.getConversations()
+    const remote = await refreshRemoteWriteMode()
+    state.conversations = remote ? await api.getRemoteConversations() : await api.getConversations()
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED') {
       state.authenticated = false
@@ -80,7 +87,9 @@ async function loadConversations() {
 
 async function loadMessages(conversationId: string) {
   try {
-    state.messages = await api.getMessages(conversationId)
+    state.messages = remoteWriteEnabled
+      ? await api.getRemoteMessages(conversationId)
+      : await api.getMessages(conversationId)
     state.messages.forEach((message) => {
       if (!message.metadata) return
       try {
@@ -105,7 +114,7 @@ async function selectConversation(id: string) {
 
 async function deleteConversation(id: string) {
   try {
-    await api.deleteConversation(id)
+    await (remoteWriteEnabled ? api.deleteRemoteConversation(id) : api.deleteConversation(id))
     state.conversations = state.conversations.filter((conversation) => conversation.id !== id)
     if (state.currentConversationId === id) {
       state.currentConversationId = null
@@ -119,7 +128,9 @@ async function deleteConversation(id: string) {
 
 async function renameConversation(id: string, title: string) {
   try {
-    const result = await api.renameConversation(id, title)
+    const result = remoteWriteEnabled
+      ? await api.renameRemoteConversation(id, title)
+      : await api.renameConversation(id, title)
     if (result.success) {
       const idx = state.conversations.findIndex((conversation) => conversation.id === id)
       if (idx >= 0) state.conversations[idx].title = title
@@ -134,8 +145,10 @@ async function renameConversation(id: string, title: string) {
 
 async function pinConversation(id: string) {
   try {
-    const result = await api.pinConversation(id)
     const idx = state.conversations.findIndex((conversation) => conversation.id === id)
+    const result = remoteWriteEnabled
+      ? await api.pinRemoteConversation(id, !(idx >= 0 && state.conversations[idx].pinned))
+      : await api.pinConversation(id)
     if (idx >= 0) {
       state.conversations[idx].pinned = result.pinned ? 1 : 0
       state.conversations.sort((a, b) => (b.pinned ?? 0) - (a.pinned ?? 0))
@@ -150,6 +163,8 @@ async function sendMessage(message: string) {
 
   state.isLoading = true
   state.streamingContent = ''
+
+  const remoteWrite = await refreshRemoteWriteMode()
 
   const userMsg: Message = {
     id: `local-user-${Date.now()}`,
@@ -170,12 +185,18 @@ async function sendMessage(message: string) {
   state.messages.push(assistantMsg)
 
   try {
-    await api.chatStream(
+    const stream = remoteWrite ? api.remoteChatStream : api.chatStream
+    await stream(
       message,
       (chunk) => {
         state.streamingContent += chunk
       },
-      () => {
+      (remoteConversationId?: string) => {
+        if (remoteConversationId) {
+          state.currentConversationId = remoteConversationId
+          userMsg.conversationId = remoteConversationId
+          assistantMsg.conversationId = remoteConversationId
+        }
         assistantMsg.content = state.streamingContent
         state.isLoading = false
         state.streamingContent = ''
