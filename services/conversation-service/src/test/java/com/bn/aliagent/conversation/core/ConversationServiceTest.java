@@ -91,11 +91,41 @@ class ConversationServiceTest {
         assertEquals("WAITING_HUMAN", waiting.status());
     }
 
+    @Test
+    void humanActiveSubmissionPersistsOnlyUserMessageAndDoesNotEnqueuePublicAiReply() {
+        UUID conversationId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        InMemoryRepository repository = new InMemoryRepository(conversationId, "AI_ACTIVE", "HUMAN_ACTIVE");
+        ConversationService service = new ConversationService(repository);
+        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-subject", "MEMBER", UUID.randomUUID().toString(), UUID.randomUUID());
+
+        var result = service.submitWithGeneration(context, conversationId, "test-human-message", requestId, requestId.toString());
+
+        assertEquals(null, result.aiMessage());
+        assertEquals(1, repository.messages.size());
+        assertEquals(0, repository.outbox.size());
+    }
+
+    @Test
+    void newlyCreatedConversationStartsInAiActiveState() {
+        UUID conversationId = UUID.randomUUID();
+        InMemoryRepository repository = new InMemoryRepository(conversationId);
+        ConversationService service = new ConversationService(repository);
+        TrustedConversationRequestContext context = new TrustedConversationRequestContext("test-tenant", "test-subject", "MEMBER", UUID.randomUUID().toString(), UUID.randomUUID());
+
+        Conversation created = service.create(context, "test-p7");
+
+        assertEquals("AI_ACTIVE", created.status());
+    }
+
     private static final class InMemoryRepository implements ConversationRepository {
         private final Conversation conversation;
+        private final String collaborationStatus;
         private final List<Message> messages = new ArrayList<>();
         private final List<ReplyRequest> outbox = new ArrayList<>();
-        private InMemoryRepository(UUID id) { Instant now = Instant.now(); conversation = new Conversation(id, "test-tenant", "test-subject", "test-p4-a", "HUMAN_ACTIVE", false, now, now); }
+        private InMemoryRepository(UUID id) { this(id, "AI_ACTIVE", null); }
+        private InMemoryRepository(UUID id, String status) { this(id, status, null); }
+        private InMemoryRepository(UUID id, String status, String collaborationStatus) { Instant now = Instant.now(); conversation = new Conversation(id, "test-tenant", "test-subject", "test-p4-a", status, false, now, now); this.collaborationStatus = collaborationStatus; }
         public Conversation create(Conversation value) { return value; }
         public Optional<Conversation> findConversation(UUID id, String tenant) { return conversation.id().equals(id) && conversation.tenantId().equals(tenant) ? Optional.of(conversation) : Optional.empty(); }
         public List<Conversation> listConversations(String tenant, int offset, int limit) { return List.of(); }
@@ -112,5 +142,6 @@ class ConversationServiceTest {
         public void enqueue(ReplyRequest value) { outbox.add(value); }
         public List<ReplyRequest> pendingReplies(int limit) { return List.of(); }
         public void markPublished(UUID id) { }
+        public CollaborationState collaborationState(String tenant, UUID conversationId) { return collaborationStatus == null ? null : new CollaborationState(collaborationStatus, "test-staff"); }
     }
 }

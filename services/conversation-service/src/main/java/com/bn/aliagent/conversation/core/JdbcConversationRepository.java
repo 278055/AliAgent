@@ -128,6 +128,13 @@ public class JdbcConversationRepository implements ConversationRepository {
         jdbc.update("UPDATE conversation_outbox SET published_at = ? WHERE event_id = ? AND published_at IS NULL", timestamp(Instant.now()), eventId);
     }
 
+    @Override
+    public CollaborationState collaborationState(String tenantId, UUID conversationId) {
+        return jdbc.query("SELECT status, staff_id FROM conversation_human_state WHERE tenant_id = ? AND conversation_id = ?",
+                (rs, row) -> new CollaborationState(rs.getString(1), rs.getString(2)), tenantId, conversationId)
+                .stream().findFirst().orElse(null);
+    }
+
     private Message message(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Message(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getLong(4), rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9), rs.getObject(10, UUID.class), rs.getString(11), rs.getTimestamp(12).toInstant());
     }

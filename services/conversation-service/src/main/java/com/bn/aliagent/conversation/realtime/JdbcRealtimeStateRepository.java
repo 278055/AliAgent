@@ -4,14 +4,16 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
 @Profile("database")
-public final class JdbcRealtimeStateRepository implements RealtimeStateRepository {
+public class JdbcRealtimeStateRepository implements RealtimeStateRepository {
     private final JdbcTemplate jdbc;
     private final int ttlSeconds;
+    @Autowired
     public JdbcRealtimeStateRepository(JdbcTemplate jdbc) { this(jdbc, 60); }
     JdbcRealtimeStateRepository(JdbcTemplate jdbc, int ttlSeconds) { this.jdbc = jdbc; this.ttlSeconds = ttlSeconds; }
     @Override public void saveConnection(RealtimeConnection value) {

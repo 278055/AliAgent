@@ -10,6 +10,7 @@ import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -20,12 +21,20 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
             "X-Trace-Id", "X-Request-Id");
     private final IdentityJwtSupport identityJwt;
     private final ServiceJwtSupport serviceJwt;
+    private final AuthorizationSnapshotPort snapshots;
 
+    @Autowired
     TrustedIdentityGatewayFilter(
             @Value("${IDENTITY_JWT_SECRET:test-identity-jwt-secret-must-be-at-least-32-bytes}") String identitySecret,
-            @Value("${SERVICE_JWT_SECRET:test-service-jwt-secret-must-be-at-least-32-bytes}") String serviceSecret) {
+            @Value("${SERVICE_JWT_SECRET:test-service-jwt-secret-must-be-at-least-32-bytes}") String serviceSecret,
+            @Value("${gateway.knowledge.base-url:http://localhost:8083}") String knowledgeBaseUrl) {
+        this(identitySecret, serviceSecret, new AuthorizationSnapshotIssuer(knowledgeBaseUrl, serviceSecret));
+    }
+
+    TrustedIdentityGatewayFilter(String identitySecret, String serviceSecret, AuthorizationSnapshotPort snapshots) {
         this.identityJwt = new IdentityJwtSupport(identitySecret);
         this.serviceJwt = new ServiceJwtSupport(serviceSecret);
+        this.snapshots = snapshots;
     }
 
     @Override public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -33,9 +42,13 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
             String authorization = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
             if (authorization == null || !authorization.startsWith("Bearer ")) throw new IllegalArgumentException("Bearer token required");
             TrustedIdentity identity = identityJwt.verify(authorization.substring(7));
+            String path = exchange.getRequest().getURI().getPath();
+            requireP7Role(path, identity);
             String traceId = UUID.randomUUID().toString();
             String requestId = UUID.randomUUID().toString();
-            String scope = exchange.getRequest().getMethod().name() + ":" + exchange.getRequest().getURI().getPath();
+            String scope = exchange.getRequest().getMethod().name() + ":" + path;
+            String audience = path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service" : "conversation-service";
+            String snapshotId = requiresKnowledgeSnapshot(path) ? snapshots.issue(identity, traceId, requestId) : null;
             var request = exchange.getRequest().mutate().headers(headers -> {
                 INTERNAL_HEADERS.forEach(headers::remove);
                 headers.set("X-Tenant-Id", identity.tenantId());
@@ -43,13 +56,17 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
                 headers.set("X-Subject-Type", identity.subjectType());
                 headers.set("X-User-Roles", String.join(",", identity.roles()));
                 headers.set("X-User-Permissions", String.join(",", identity.permissions()));
+                if (snapshotId != null) headers.set("X-Authorization-Snapshot-Id", snapshotId);
                 headers.set("X-Trace-Id", traceId);
                 headers.set("X-Request-Id", requestId);
-                headers.set("X-Service-Authorization", "Bearer " + serviceJwt.issue("gateway-service", "conversation-service", List.of(scope)));
+                headers.set("X-Service-Authorization", "Bearer " + serviceJwt.issue("gateway-service", audience, List.of(scope)));
             }).build();
             exchange.getResponse().getHeaders().set("X-Trace-Id", traceId);
             exchange.getResponse().getHeaders().set("X-Request-Id", requestId);
             return chain.filter(exchange.mutate().request(request).build());
+        } catch (ForbiddenException exception) {
+            exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+            return exchange.getResponse().setComplete();
         } catch (RuntimeException exception) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
@@ -57,4 +74,23 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
     }
 
     @Override public int getOrder() { return Ordered.HIGHEST_PRECEDENCE; }
+
+    private void requireP7Role(String path, TrustedIdentity identity) {
+        if (path.startsWith("/api/v1/copilot/") && !"STAFF".equals(identity.subjectType())) {
+            throw new ForbiddenException();
+        }
+        if (path.startsWith("/api/v1/supervisor/") && !identity.roles().contains("SUPERVISOR")) {
+            throw new ForbiddenException();
+        }
+        if (path.startsWith("/api/v1/agent/") && !"STAFF".equals(identity.subjectType())) {
+            throw new ForbiddenException();
+        }
+    }
+
+    private boolean requiresKnowledgeSnapshot(String path) {
+        return path.startsWith("/api/v1/copilot/")
+                || path.matches("/api/v1/conversations/[^/]+/messages");
+    }
+
+    private static final class ForbiddenException extends RuntimeException { }
 }

@@ -20,6 +20,7 @@ logging:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} service=ai-orchestration-service]"
 orchestration:
   messaging:
+    copilot-requested-queue: ${ORCHESTRATION_COPILOT_REQUESTED_QUEUE:copilot.suggestion.requested.v2}
     ai-reply:
       v1-queue: ${ORCHESTRATION_AI_REPLY_V1_QUEUE:ai.reply.requested.v1}
       v2-queue: ${ORCHESTRATION_AI_REPLY_V2_QUEUE:ai.reply.requested.v2}

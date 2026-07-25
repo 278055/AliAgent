@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["suggestionId","requestId","action"],"properties":{"suggestionId":{"type":"string","format":"uuid"},"requestId":{"type":"string","format":"uuid"},"action":{"enum":["ACCEPTED","MODIFIED","IGNORED"]}}}

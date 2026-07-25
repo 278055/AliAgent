@@ -24,7 +24,8 @@ class TrustedKnowledgeContextFilterConfiguration {
 class TrustedKnowledgeContextFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return "/api/v1/health".equals(request.getRequestURI());
+        return "/api/v1/health".equals(request.getRequestURI())
+                || "/internal/api/v1/authorization-snapshots".equals(request.getRequestURI());
     }
 
     @Override

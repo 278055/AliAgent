@@ -8,6 +8,14 @@ spring:
           uri: ${CONVERSATION_WS_URI:ws://localhost:8081}
           predicates:
             - Path=/api/v1/ws/conversations
+        - id: conversation-human-agent-api
+          uri: ${CONVERSATION_HTTP_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/agent/**,/api/v1/supervisor/**,/api/v1/conversations/*/human-queue,/api/v1/conversations/*/human-messages,/api/v1/conversations/*/transfer/**,/api/v1/conversations/*/human-release,/api/v1/conversations/*/human-close
+        - id: copilot-api
+          uri: ${ORCHESTRATION_HTTP_URI:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/copilot/**
         - id: conversation-api
           uri: ${CONVERSATION_HTTP_URI:http://localhost:8081}
           predicates:

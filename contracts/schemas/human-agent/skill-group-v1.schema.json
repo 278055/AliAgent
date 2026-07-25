@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"SkillGroupV1","type":"object","required":["id","tenantId","name","routingRuleVersion"],"properties":{"id":{"type":"string","format":"uuid"},"tenantId":{"type":"string"},"name":{"type":"string"},"routingRuleVersion":{"type":"string"}}}

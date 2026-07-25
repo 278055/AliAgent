@@ -2,6 +2,7 @@ package com.bn.aliagent.gateway;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.bn.platform.security.ServiceJwtSupport;
 import io.jsonwebtoken.Jwts;
@@ -32,7 +33,7 @@ class TrustedIdentityGatewayFilterTest {
                 .header("X-Service-Authorization", "Bearer forged").build());
         AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
 
-        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret).filter(exchange, value -> {
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString()).filter(exchange, value -> {
             forwarded.set(value.getRequest().getHeaders());
             return reactor.core.publisher.Mono.empty();
         }).block();
@@ -42,5 +43,62 @@ class TrustedIdentityGatewayFilterTest {
         assertNotEquals("Bearer forged", forwarded.get().getFirst("X-Service-Authorization"));
         new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7),
                 "conversation-service", "GET:/api/v1/conversations");
+    }
+
+    @Test
+    void copilotRouteIsIssuedForTheOrchestrationServiceAndRejectsMembers() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        String member = identityToken(identitySecret, "member-1", "MEMBER", List.of("MEMBER"));
+        var memberExchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/copilot/conversations/" + java.util.UUID.randomUUID() + "/suggestions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + member).build());
+
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString()).filter(memberExchange, value -> reactor.core.publisher.Mono.empty()).block();
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, memberExchange.getResponse().getStatusCode());
+        String staff = identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF"));
+        var staffExchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/copilot/conversations/" + java.util.UUID.randomUUID() + "/suggestions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + staff).build());
+        AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
+
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString()).filter(staffExchange, value -> {
+            forwarded.set(value.getRequest().getHeaders());
+            return reactor.core.publisher.Mono.empty();
+        }).block();
+
+        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7),
+                "ai-orchestration-service", "GET:" + staffExchange.getRequest().getPath().value());
+    }
+
+    @Test
+    void 普通会话请求不依赖知识快照服务() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/conversations")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "member-1", "MEMBER", List.of("MEMBER"))).build());
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> { throw new IllegalStateException("knowledge unavailable"); })
+                .filter(exchange, value -> reactor.core.publisher.Mono.empty()).block();
+        assertNull(exchange.getResponse().getStatusCode());
+        assertNull(exchange.getResponse().getHeaders().getFirst("X-Authorization-Snapshot-Id"));
+    }
+
+    @Test
+    void 副驾请求在可信快照无法持久化时拒绝转发() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/copilot/conversations/" + java.util.UUID.randomUUID() + "/suggestions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF"))).build());
+
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> { throw new IllegalStateException("knowledge unavailable"); })
+                .filter(exchange, value -> reactor.core.publisher.Mono.empty()).block();
+
+        assertEquals(org.springframework.http.HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    }
+
+    private static String identityToken(String secret, String subject, String type, List<String> roles) {
+        Instant now = Instant.now();
+        return Jwts.builder().subject(subject).claim("subjectType", type).claim("tenantId", "test-p4-tenant")
+                .claim("roles", roles).claim("permissions", List.of()).issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(60)))
+                .id("test-jti-" + subject).signWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8))).compact();
     }
 }

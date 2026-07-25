@@ -20,7 +20,8 @@ import jakarta.websocket.server.ServerEndpointConfig;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.servlet.ServletContextInitializer;
+import org.springframework.boot.web.context.WebServerInitializedEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -36,9 +37,12 @@ public class RealtimeWebSocketConfiguration {
     @Bean(destroyMethod = "close") RedisRealtimeSubscriber realtimeSubscriber(@Value("${CONVERSATION_REDIS_HOST:localhost}") String host, @Value("${CONVERSATION_REDIS_PORT:6379}") int port, @Value("${CONVERSATION_REDIS_PASSWORD:}") String password, @Value("${CONVERSATION_INSTANCE_ID:conversation-local}") String instanceId, RealtimeSessionRegistry sessions) {
         return new RedisRealtimeSubscriber(host, port, password, instanceId, sessions);
     }
-    @Bean ServletContextInitializer realtimeWebSocketEndpoint(@Value("${SERVICE_JWT_SECRET:test-service-jwt-secret-must-be-at-least-32-bytes}") String secret, ConversationService conversations, RealtimeCollaborationService realtime, RealtimeSessionRegistry sessions, RealtimeStateService state, RedisRealtimeSubscriber subscriber) {
-        return servletContext -> {
-            try { register(servletContext, new ServiceJwtSupport(secret), conversations, realtime, sessions, state, subscriber); }
+    @Bean ApplicationListener<WebServerInitializedEvent> realtimeWebSocketEndpoint(
+            @Value("${SERVICE_JWT_SECRET:test-service-jwt-secret-must-be-at-least-32-bytes}") String secret,
+            ConversationService conversations, RealtimeCollaborationService realtime, RealtimeSessionRegistry sessions,
+            RealtimeStateService state, RedisRealtimeSubscriber subscriber) {
+        return event -> {
+            try { register(((org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext) event.getApplicationContext()).getServletContext(), new ServiceJwtSupport(secret), conversations, realtime, sessions, state, subscriber); }
             catch (Exception exception) { throw new IllegalStateException("Unable to register conversation WebSocket endpoint", exception); }
         };
     }
