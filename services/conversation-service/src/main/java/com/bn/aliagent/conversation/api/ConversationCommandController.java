@@ -19,9 +19,9 @@ public class ConversationCommandController {
     public ConversationCommandController(ConversationService service, com.bn.aliagent.conversation.core.ConversationBusinessContextService businessContexts) { this.service = service; this.businessContexts = businessContexts; }
 
     @PostMapping public Map<String, Object> create(@RequestBody CreateConversation body, HttpServletRequest request) { return ok(view(service.create(TrustedConversationRequestContext.from(request), body.title()))); }
-    @PatchMapping("/{id}") public Map<String, Object> patch(@PathVariable UUID id, @RequestBody PatchConversation body, HttpServletRequest request) { return ok(view(service.patch(TrustedConversationRequestContext.from(request), id, body.title(), body.pinned(), body.closed()))); }
-    @DeleteMapping("/{id}") public Map<String, Object> delete(@PathVariable UUID id, HttpServletRequest request) { service.delete(TrustedConversationRequestContext.from(request), id); return ok(Map.of()); }
-    @PostMapping("/{id}/messages") public Map<String, Object> submit(@PathVariable UUID id, @RequestBody SubmitMessage body, @RequestHeader("Idempotency-Key") String key, HttpServletRequest request) {
+    @PatchMapping("/{id}") public Map<String, Object> patch(@PathVariable("id") UUID id, @RequestBody PatchConversation body, HttpServletRequest request) { return ok(view(service.patch(TrustedConversationRequestContext.from(request), id, body.title(), body.pinned(), body.closed()))); }
+    @DeleteMapping("/{id}") public Map<String, Object> delete(@PathVariable("id") UUID id, HttpServletRequest request) { service.delete(TrustedConversationRequestContext.from(request), id); return ok(Map.of()); }
+    @PostMapping("/{id}/messages") public Map<String, Object> submit(@PathVariable("id") UUID id, @RequestBody SubmitMessage body, @RequestHeader("Idempotency-Key") String key, HttpServletRequest request) {
         if (body.content() == null || body.content().isBlank()) throw new ConversationException("CONV-400-002", "content is required");
         var generation = service.submitWithGeneration(TrustedConversationRequestContext.from(request), id, body.content(), body.requestId(), key);
         Map<String, Object> data = new java.util.LinkedHashMap<>();
@@ -31,11 +31,11 @@ public class ConversationCommandController {
         data.put("aiMessage", generation.aiMessage() == null ? null : messageView(generation.aiMessage()));
         return ok(data);
     }
-    @PostMapping("/{id}/human-messages") public Map<String, Object> staffMessage(@PathVariable UUID id, @RequestBody SubmitStaffMessage body, HttpServletRequest request) { return ok(messageView(service.submitStaffMessage(TrustedConversationRequestContext.from(request), id, body.content(), body.clientMessageId()))); }
-    @PostMapping("/{id}/takeover") public Map<String, Object> takeOver(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.takeOver(TrustedConversationRequestContext.from(request), id))); }
-    @PostMapping("/{id}/human-request") public Map<String, Object> requestHuman(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.requestHuman(TrustedConversationRequestContext.from(request), id))); }
-    @PostMapping("/{id}/release") public Map<String, Object> release(@PathVariable UUID id, HttpServletRequest request) { return ok(view(service.release(TrustedConversationRequestContext.from(request), id))); }
-    @PutMapping("/{id}/business-context") public Map<String, Object> bindBusinessContext(@PathVariable UUID id, @RequestBody BindBusinessContext body, HttpServletRequest request) {
+    @PostMapping("/{id}/human-messages") public Map<String, Object> staffMessage(@PathVariable("id") UUID id, @RequestBody SubmitStaffMessage body, HttpServletRequest request) { return ok(messageView(service.submitStaffMessage(TrustedConversationRequestContext.from(request), id, body.content(), body.clientMessageId()))); }
+    @PostMapping("/{id}/takeover") public Map<String, Object> takeOver(@PathVariable("id") UUID id, HttpServletRequest request) { return ok(view(service.takeOver(TrustedConversationRequestContext.from(request), id))); }
+    @PostMapping("/{id}/human-request") public Map<String, Object> requestHuman(@PathVariable("id") UUID id, HttpServletRequest request) { return ok(view(service.requestHuman(TrustedConversationRequestContext.from(request), id))); }
+    @PostMapping("/{id}/release") public Map<String, Object> release(@PathVariable("id") UUID id, HttpServletRequest request) { return ok(view(service.release(TrustedConversationRequestContext.from(request), id))); }
+    @PutMapping("/{id}/business-context") public Map<String, Object> bindBusinessContext(@PathVariable("id") UUID id, @RequestBody BindBusinessContext body, HttpServletRequest request) {
         if (body.orderId() == null) throw new ConversationException("CONV-400-003", "orderId is required");
         var context = businessContexts.bind(TrustedConversationRequestContext.from(request), id, body.orderId(), body.requestId());
         return ok(new BusinessContextView(context.linkedOrderId(), context.linkedAfterSaleId()));

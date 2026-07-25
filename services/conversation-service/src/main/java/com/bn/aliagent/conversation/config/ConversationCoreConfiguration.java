@@ -3,6 +3,7 @@ package com.bn.aliagent.conversation.config;
 import com.bn.aliagent.conversation.core.AIReplyRequestedPublisher;
 import com.bn.aliagent.conversation.core.ConversationOutboxDispatcher;
 import com.bn.aliagent.conversation.core.ConversationRepository;
+import com.bn.aliagent.conversation.core.ConversationService;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.annotation.Bean;
@@ -26,5 +27,11 @@ public class ConversationCoreConfiguration {
     @Bean
     ConversationOutboxDispatcher conversationOutboxDispatcher(ConversationRepository repository, AIReplyRequestedPublisher publisher) {
         return new ConversationOutboxDispatcher(repository, publisher);
+    }
+
+    @Bean
+    ConversationService conversationService(ConversationRepository repository,
+            com.bn.aliagent.conversation.messaging.HumanCollaborationOutbox humanOutbox) {
+        return new ConversationService(repository, humanOutbox);
     }
 }

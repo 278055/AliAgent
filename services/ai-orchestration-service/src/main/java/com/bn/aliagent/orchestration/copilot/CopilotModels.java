@@ -12,7 +12,16 @@ public final class CopilotModels {
     public record Citation(String title, String source) { }
     public record GenerateCommand(UUID requestId, String tenantId, UUID conversationId, UUID triggerMessageId,
                                   String assignedAgentId, String currentAgentId, int refreshNo,
-                                  String modelVersion, String promptVersion, String workflowVersion) { }
+                                  String modelVersion, String promptVersion, String workflowVersion,
+                                  UUID authorizationSnapshotId, String subjectId, String subjectType,
+                                  String roles, String permissions) {
+        public GenerateCommand(UUID requestId, String tenantId, UUID conversationId, UUID triggerMessageId,
+                               String assignedAgentId, String currentAgentId, int refreshNo,
+                               String modelVersion, String promptVersion, String workflowVersion) {
+            this(requestId, tenantId, conversationId, triggerMessageId, assignedAgentId, currentAgentId, refreshNo,
+                    modelVersion, promptVersion, workflowVersion, null, null, null, null, null);
+        }
+    }
     public record SuggestionRequested(UUID eventId, GenerateCommand command) { }
     public record PromptContext(CopilotPorts.ConversationContext conversation, List<Citation> citations,
                                 List<String> commerceFacts, List<String> afterSaleFacts) { }

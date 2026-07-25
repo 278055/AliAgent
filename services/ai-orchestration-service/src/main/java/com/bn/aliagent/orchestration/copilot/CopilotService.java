@@ -40,7 +40,10 @@ public final class CopilotService {
         if (!"HUMAN_ACTIVE".equals(conversation.collaborationState()) || !command.assignedAgentId().equals(command.currentAgentId())
                 || !command.assignedAgentId().equals(conversation.assignedAgentId())) throw new CopilotException("当前客服未接管该会话");
         try {
-            List<CopilotModels.Citation> citations = knowledge.retrieve(command.tenantId(), command.conversationId());
+            String query = conversation.messages().isEmpty() ? "" : conversation.messages().get(conversation.messages().size() - 1);
+            List<CopilotModels.Citation> citations = knowledge.retrieve(command.tenantId(), command.conversationId(),
+                    command.authorizationSnapshotId(), command.subjectId(), command.subjectType(), command.roles(),
+                    command.permissions(), query);
             var context = new CopilotModels.PromptContext(conversation, citations, commerce.read(command.tenantId(), command.conversationId()), afterSale.read(command.tenantId(), command.conversationId()));
             modelCalls++;
             var generated = create(command, CopilotModels.SuggestionStatus.GENERATED, sanitizeModelOutput(model.generate(prompts.create(context), context)), citations);

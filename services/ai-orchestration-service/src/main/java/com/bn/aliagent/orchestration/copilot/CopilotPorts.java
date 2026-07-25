@@ -13,7 +13,13 @@ public final class CopilotPorts {
         }
     }
     public interface ConversationContextPort { ConversationContext load(String tenantId, UUID conversationId); }
-    public interface KnowledgeContextPort { List<CopilotModels.Citation> retrieve(String tenantId, UUID conversationId); }
+    public interface KnowledgeContextPort {
+        List<CopilotModels.Citation> retrieve(String tenantId, UUID conversationId);
+        default List<CopilotModels.Citation> retrieve(String tenantId, UUID conversationId, UUID authorizationSnapshotId,
+                String subjectId, String subjectType, String roles, String permissions, String query) {
+            return retrieve(tenantId, conversationId);
+        }
+    }
     public interface CommerceFactPort { List<String> read(String tenantId, UUID conversationId); }
     public interface AfterSaleFactPort { List<String> read(String tenantId, UUID conversationId); }
     public interface CopilotModelPort { String generate(String prompt, CopilotModels.PromptContext context); }

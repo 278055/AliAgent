@@ -31,7 +31,7 @@ class RealtimeDatabaseIntegrationTest {
                  Statement statement = connection.createStatement();
                  var result = statement.executeQuery("SELECT COUNT(*) FROM flyway_schema_history")) {
                 result.next();
-                assertEquals(7, result.getInt(1));
+                assertEquals(9, result.getInt(1));
             }
             try (Connection connection = DriverManager.getConnection(url, "postgres", "123456");
                  Statement statement = connection.createStatement();

@@ -30,13 +30,14 @@ public final class ServiceJwtAuthenticationFilter extends OncePerRequestFilter {
             if (authorization == null || !authorization.startsWith("Bearer ")) throw new IllegalArgumentException("Missing service JWT");
             jwtSupport.verify(authorization.substring(7), serviceName, request.getMethod() + ":" + request.getRequestURI());
             request.setAttribute(VERIFIED_ATTRIBUTE, Boolean.TRUE);
-            chain.doFilter(request, response);
         } catch (Exception exception) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json;charset=UTF-8");
             String requestId = request.getHeader("X-Request-Id");
             if (requestId == null || requestId.isBlank()) requestId = UUID.randomUUID().toString();
             response.getWriter().write("{\"code\":\"AUTH-401-001\",\"message\":\"服务认证无效\",\"requestId\":\"" + requestId + "\"}");
+            return;
         }
+        chain.doFilter(request, response);
     }
 }

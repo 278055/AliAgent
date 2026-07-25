@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ConversationRepository {
+    record CollaborationState(String status, String staffId) { }
     Conversation create(Conversation value);
     Optional<Conversation> findConversation(UUID id, String tenantId);
     List<Conversation> listConversations(String tenantId, int offset, int limit);
@@ -24,4 +25,5 @@ public interface ConversationRepository {
     void enqueue(ReplyRequest value);
     List<ReplyRequest> pendingReplies(int limit);
     void markPublished(UUID eventId);
+    default CollaborationState collaborationState(String tenantId, UUID conversationId) { return null; }
 }

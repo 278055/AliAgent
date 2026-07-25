@@ -26,7 +26,7 @@ public class SseStreamController {
     private final SseEventHub events;
     public SseStreamController(StreamingService streaming, SseEventHub events) { this.streaming = streaming; this.events = events; }
     @GetMapping(value = "/api/v1/conversations/{conversationId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(@PathVariable UUID conversationId, @RequestParam(defaultValue = "0") long afterSequence, HttpServletRequest request) throws Exception {
+    public SseEmitter stream(@PathVariable("conversationId") UUID conversationId, @RequestParam(defaultValue = "0") long afterSequence, HttpServletRequest request) throws Exception {
         TrustedConversationRequestContext context = TrustedConversationRequestContext.from(request);
         SseEmitter emitter = new SseEmitter(0L);
         for (var event : streaming.replay(context, conversationId, afterSequence)) emitter.send(SseEmitter.event().name(event.eventType()).id(Long.toString(event.sequence())).data(event));
@@ -34,12 +34,12 @@ public class SseStreamController {
         return emitter;
     }
     @PostMapping("/internal/api/v1/conversations/{conversationId}/generations/{generationId}/chunks")
-    public Map<String, Object> chunk(@PathVariable UUID conversationId, @PathVariable UUID generationId, @RequestBody StreamChunk body, HttpServletRequest request) {
+    public Map<String, Object> chunk(@PathVariable("conversationId") UUID conversationId, @PathVariable("generationId") UUID generationId, @RequestBody StreamChunk body, HttpServletRequest request) {
         streaming.acceptChunk(TrustedConversationRequestContext.from(request), conversationId, generationId, body);
         return Map.of("code", 200, "message", "", "data", Map.of("accepted", true));
     }
     @PostMapping("/api/v1/conversations/{conversationId}/generations/{generationId}:cancel")
-    public Map<String, Object> cancel(@PathVariable UUID conversationId, @PathVariable UUID generationId, HttpServletRequest request) {
+    public Map<String, Object> cancel(@PathVariable("conversationId") UUID conversationId, @PathVariable("generationId") UUID generationId, HttpServletRequest request) {
         streaming.cancel(TrustedConversationRequestContext.from(request), conversationId, generationId);
         return Map.of("code", 200, "message", "", "data", Map.of("cancelled", true));
     }

@@ -11,7 +11,7 @@ public final class TrustedStaffMessageAdapter implements CopilotPorts.StaffMessa
 
     public TrustedStaffMessageAdapter(String baseUrl, String serviceJwt, int timeoutMs, int attempts) {
         this.baseUrl = baseUrl;
-        this.client = new TrustedCopilotHttpClient(serviceJwt, timeoutMs, attempts);
+        this.client = new TrustedCopilotHttpClient(serviceJwt, "conversation-service", timeoutMs, attempts);
     }
 
     @Override
@@ -19,7 +19,7 @@ public final class TrustedStaffMessageAdapter implements CopilotPorts.StaffMessa
         try {
             client.post(baseUrl + "/internal/api/v1/conversations/" + conversationId + "/staff-messages",
                     JSON.writeValueAsString(Map.of("content", content, "clientMessageId", requestId)),
-                    tenantId, agentId, "STAFF", requestId);
+                    tenantId, agentId, "STAFF", "STAFF", "", null, requestId);
         } catch (CopilotException exception) { throw exception;
         } catch (Exception exception) { throw new CopilotException("cannot encode staff message"); }
     }

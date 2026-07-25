@@ -22,7 +22,7 @@ public class InternalCopilotStaffMessageController {
     public InternalCopilotStaffMessageController(ConversationService conversations) { this.conversations = conversations; }
 
     @PostMapping("/{conversationId}/staff-messages")
-    public Map<String, Object> send(@PathVariable UUID conversationId, @RequestBody Body body, HttpServletRequest request) {
+    public Map<String, Object> send(@PathVariable("conversationId") UUID conversationId, @RequestBody Body body, HttpServletRequest request) {
         if (body.content() == null || body.content().isBlank() || body.clientMessageId() == null) {
             throw new ConversationException("CONV-400-002", "content and clientMessageId are required");
         }

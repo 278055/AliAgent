@@ -6,23 +6,23 @@ import com.bn.aliagent.conversation.core.ConversationModels.ReplyRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Service
-@Profile("database")
 public class ConversationService {
     private final ConversationRepository repository;
+    private final com.bn.aliagent.conversation.messaging.HumanCollaborationOutbox humanOutbox;
 
-    public ConversationService(ConversationRepository repository) { this.repository = repository; }
+    public ConversationService(ConversationRepository repository) { this(repository, com.bn.aliagent.conversation.messaging.HumanCollaborationOutbox.noop()); }
+    public ConversationService(ConversationRepository repository, com.bn.aliagent.conversation.messaging.HumanCollaborationOutbox humanOutbox) {
+        this.repository = repository; this.humanOutbox = humanOutbox;
+    }
 
     @Transactional
     public Conversation create(TrustedConversationRequestContext context, String title) {
         Instant now = Instant.now();
         String value = title == null || title.isBlank() ? "New conversation" : title;
         return repository.create(new Conversation(UUID.randomUUID(), context.tenantId(), context.subjectId(), value,
-                "HUMAN_ACTIVE", false, now, now));
+                "AI_ACTIVE", false, now, now));
     }
 
     public Conversation get(TrustedConversationRequestContext context, UUID id) { return owned(context, id); }
@@ -72,7 +72,16 @@ public class ConversationService {
         }
         userMessage = repository.appendUserMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
                 0, "USER", "TEXT", "PRIVATE", content, "SUBMITTED", requestId, "{}", Instant.now()), context.subjectId());
-        if (!"AI_ACTIVE".equals(conversation.status())) return new ConversationModels.Generation(null, userMessage, null);
+        ConversationRepository.CollaborationState collaboration = repository.collaborationState(context.tenantId(), conversationId);
+        if (collaboration != null && "HUMAN_ACTIVE".equals(collaboration.status())) {
+            if (context.authorizationSnapshotId() != null && collaboration.staffId() != null && !collaboration.staffId().isBlank()) {
+                humanOutbox.append("copilot.suggestion.requested.v2", context.tenantId(), conversationId, requestId,
+                        collaboration.staffId(), userMessage.content(), "HUMAN_ACTIVE", context.authorizationSnapshotId(),
+                        context.subjectId(), context.subjectType(), context.roles(), context.permissions());
+            }
+            return new ConversationModels.Generation(null, userMessage, null);
+        }
+        if (!"AI_ACTIVE".equals(conversation.status()) || collaboration != null && !"AI_ACTIVE".equals(collaboration.status())) return new ConversationModels.Generation(null, userMessage, null);
         Message aiMessage = repository.findAiGeneration(context.tenantId(), conversationId, requestId).orElseGet(() -> {
             UUID generationId = UUID.randomUUID();
             return repository.appendAiStreamingMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId,
