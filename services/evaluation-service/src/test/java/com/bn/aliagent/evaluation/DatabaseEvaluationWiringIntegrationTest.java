@@ -2,14 +2,22 @@ package com.bn.aliagent.evaluation;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bn.aliagent.evaluation.gate.GateController;
 import com.bn.aliagent.evaluation.gate.GateDecisionSigner;
 import com.bn.aliagent.evaluation.gate.GateDecisionVerifier;
+import com.bn.aliagent.evaluation.gate.GateDecision;
+import com.bn.aliagent.evaluation.gate.GatePolicy;
+import com.bn.aliagent.evaluation.gate.GateResultPort;
 import com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository;
 import com.bn.aliagent.evaluation.runner.EvaluationRunService;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +47,18 @@ class DatabaseEvaluationWiringIntegrationTest {
         assertNotNull(signer);
         assertNotNull(verifier);
         assertInstanceOf(JdbcGateDecisionRepository.class, decisions);
+    }
+
+    @Test
+    void persistedPassProofIsAcceptedThenRejectedAfterTenantScopedRevocation() {
+        String tenant = "test-p8-wiring";
+        GateDecision.GateTarget target = new GateDecision.GateTarget(tenant, "PROMPT", java.util.UUID.randomUUID(), "manifest");
+        GateResultPort.GateEvaluationResults results = new GateResultPort.GateEvaluationResults(tenant, java.util.UUID.randomUUID(), "manifest", "baseline", "dataset", "score", true, List.of(), Map.of(), "result", Instant.now());
+        GateController.IssuedDecision issued = gates.issue(tenant, target, new GatePolicy("policy", Map.of(), true), results, "database", 600);
+
+        assertTrue(decisions.verify(tenant, issued.proof(), target, "policy", verifier));
+        decisions.revoke(tenant, issued.proof().proofId(), "test");
+        assertFalse(decisions.verify(tenant, issued.proof(), target, "policy", verifier));
     }
 
     @AfterAll

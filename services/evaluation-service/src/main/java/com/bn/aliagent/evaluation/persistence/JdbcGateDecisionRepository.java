@@ -30,6 +30,7 @@ public final class JdbcGateDecisionRepository {
     public boolean verify(String tenantId, GateDecision.GateProof proof, GateDecision.GateTarget target, String policyVersion, GateDecisionVerifier verifier) {
         return findProof(tenantId, proof.proofId()).filter(stored -> stored.canonicalPayload().equals(proof.canonicalPayload())
                 && stored.signature().equals(proof.signature()) && stored.keyId().equals(proof.keyId()))
+                .filter(stored -> !revocations(tenantId).isRevoked(stored.proofId()))
                 .filter(stored -> verifier.verify(stored, target, policyVersion).accepted()).isPresent();
     }
     public void revoke(String tenantId, UUID proofId, String reason) {

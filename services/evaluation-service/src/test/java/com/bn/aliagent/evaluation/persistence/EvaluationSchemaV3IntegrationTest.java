@@ -34,7 +34,7 @@ class EvaluationSchemaV3IntegrationTest {
                 .load();
 
         flyway.migrate();
-        assertEquals("11", flyway.info().current().getVersion().getVersion());
+        assertEquals("12", flyway.info().current().getVersion().getVersion());
         List<String> tables = List.of(
                 "evaluation_dataset_draft_sample",
                 "evaluation_run_manifest",
@@ -78,7 +78,7 @@ class EvaluationSchemaV3IntegrationTest {
                 .load();
         latest.migrate();
 
-        assertEquals("11", latest.info().current().getVersion().getVersion());
+        assertEquals("12", latest.info().current().getVersion().getVersion());
         var v6 = java.util.Arrays.stream(latest.info().all())
                 .filter(migration -> migration.getVersion() != null && "6".equals(migration.getVersion().getVersion()))
                 .findFirst()
