@@ -15,6 +15,6 @@ public final class EvaluationRunService {
     }
 
     public List<ReplayResult> run(String tenantId, EvaluationManifest manifest) {
-        return datasets.published(manifest.datasetVersionId()).stream().map(fixture -> runner.replay(tenantId, manifest, fixture)).toList();
+        return datasets.published(tenantId, manifest.datasetVersionId()).stream().map(fixture -> runner.replay(tenantId, manifest, fixture)).toList();
     }
 }

@@ -12,7 +12,7 @@ public final class VersionComparisonService {
                     .orElse(new MetricAggregate(base.metric(), base.label(), base.riskLevel(), "NOT_APPLICABLE", 0, List.of()));
             deltas.add(new MetricDelta(base.metric(), base.label(), base.riskLevel(), base.count(), current.count(), current.count() - base.count()));
         }
-        List<String> failures = baseline.metrics().stream().filter(value -> "FAIL".equals(value.status())).flatMap(value -> value.evidenceRefs().stream()).toList();
+        List<String> failures = candidate.metrics().stream().filter(value -> "FAIL".equals(value.status())).flatMap(value -> value.evidenceRefs().stream()).toList();
         return new VersionComparison(List.copyOf(deltas), failures);
     }
     private void sameConditions(EvaluationRunSummary left, EvaluationRunSummary right) {

@@ -46,6 +46,20 @@ class MockReplayRunnerTest {
         assertEquals("HUMAN_HANDOFF", runner.run(TENANT, manifest, fixture("HUMAN_HANDOFF", false, false, false, true)).intent());
     }
 
+    @Test
+    void evaluationDatasetReadRejectsForeignTenant() {
+        var manifest = manifest();
+        var fixture = fixture("GENERAL", false, false, false, false);
+        var datasets = (DatasetSnapshotPort) (tenantId, datasetVersionId) -> {
+            if (!TENANT.equals(tenantId)) throw new SecurityException("跨租户读取被拒绝");
+            return List.of(fixture);
+        };
+        var service = new EvaluationRunService(datasets,
+                (tenantId, evaluationManifest, replayFixture) -> new MockReplayRunner().run(tenantId, evaluationManifest, replayFixture));
+
+        assertThrows(SecurityException.class, () -> service.run("test-tenant-b", manifest));
+    }
+
     private static ReplayFixture fixture(String intent, boolean rag, boolean order, boolean failure, boolean handoff) {
         return new ReplayFixture(UUID.randomUUID(), intent, "test input", intent, List.of(), List.of(), rag, order, failure, handoff, false);
     }
