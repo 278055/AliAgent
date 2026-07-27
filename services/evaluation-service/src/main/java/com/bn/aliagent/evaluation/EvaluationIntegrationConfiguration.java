@@ -6,13 +6,17 @@ import com.bn.aliagent.evaluation.intake.EventInbox;
 import com.bn.aliagent.evaluation.intake.EventIntakeService;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 class EvaluationIntegrationConfiguration {
-    @Bean EventInbox evaluationEventInbox() { return new EventInbox.InMemory(); }
-    @Bean CandidateSink evaluationCandidateSink() { return candidate -> { }; }
+    @Bean @Profile("!database") EventInbox evaluationEventInbox() { return new EventInbox.InMemory(); }
+    @Bean @Profile("database") EventInbox jdbcEvaluationEventInbox(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcEventInbox(jdbc); }
+    @Bean @Profile("!database") CandidateSink evaluationCandidateSink() { return candidate -> { }; }
+    @Bean @Profile("database") CandidateSink jdbcEvaluationCandidateSink(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcCandidateSink(jdbc); }
     @Bean EventIntakeService eventIntakeService(EventInbox inbox, CandidateSink sink,
             @Value("${evaluation.anonymization.key}") String anonymizationKey) {
         return new EventIntakeService(inbox, (payload, tenantId) -> {
