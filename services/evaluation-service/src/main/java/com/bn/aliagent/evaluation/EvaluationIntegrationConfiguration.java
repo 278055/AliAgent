@@ -22,7 +22,8 @@ class EvaluationIntegrationConfiguration {
     @Bean @Profile("!database") CandidateSink evaluationCandidateSink() { return candidate -> { }; }
     @Bean @Profile("database") CandidateSink jdbcEvaluationCandidateSink(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcCandidateSink(jdbc); }
     @Bean @Profile("!database") CandidateRepository evaluationCandidateRepository() { return new CandidateRepository.InMemory(); }
-    @Bean @Profile("database") CandidateRepository jdbcEvaluationCandidateRepository(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcEvaluationDatasetRepository(jdbc); }
+    @Bean @Profile("database") CandidateRepository jdbcEvaluationCandidateRepository(JdbcTemplate jdbc,
+            @Value("${evaluation.anonymization.key}") String anonymizationKey) { return new com.bn.aliagent.evaluation.persistence.JdbcEvaluationDatasetRepository(jdbc, new PublicDatasetAnonymizer(new DeterministicAnonymizer(anonymizationKey))); }
     @Bean CandidateReviewService candidateReviewService(CandidateRepository repository) { return new CandidateReviewService(repository); }
     @Bean EvaluationDatasetService evaluationDatasetService(CandidateRepository repository,
             @Value("${evaluation.anonymization.key}") String anonymizationKey) {
