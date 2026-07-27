@@ -60,6 +60,10 @@ class JdbcDatasetWorkflowIntegrationTest {
             assertEquals(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(labels), json.path("labels"));
             assertEquals(expected, repository.require("test-p8-tenant-a", candidate).expected());
             assertEquals(labels, repository.require("test-p8-tenant-a", candidate).labels());
+            var reloaded = new JdbcEvaluationDatasetRepository(jdbc, new PublicDatasetAnonymizer(new DeterministicAnonymizer("test-p8"))).requirePublished("test-p8-tenant-a", published.id());
+            assertEquals(1, reloaded.samples().size());
+            assertEquals(expected, reloaded.samples().get(0).expected());
+            assertEquals(labels, reloaded.samples().get(0).labels());
 
             UUID secondCandidate = UUID.randomUUID();
             jdbc.update("INSERT INTO evaluation_candidate (id, tenant_id, source_event_id, anonymized_body, body_digest, status, anonymization_rule_version, expires_at) VALUES (?, ?, ?, ?::jsonb, ?, 'ACCEPTED', 'test-v1', ?)", secondCandidate, "test-p8-tenant-a", UUID.randomUUID(), "{\"input\":\"second\"}", "c".repeat(64), Timestamp.from(Instant.now().plusSeconds(3600)));
@@ -77,6 +81,25 @@ class JdbcDatasetWorkflowIntegrationTest {
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
         }
+    }
+
+    @Test
+    void rollsBackCandidateReviewWhenAuditWriteFails() {
+        String schema = "test_p8_review_tx_" + UUID.randomUUID().toString().replace("-", "");
+        String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;
+        JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "postgres", "123456"));
+        jdbc.execute("CREATE SCHEMA " + schema);
+        try {
+            Flyway.configure().dataSource(url, "postgres", "123456").schemas(schema).locations("filesystem:" + Path.of("src/main/resources/db/migration").toAbsolutePath()).load().migrate();
+            UUID candidate = UUID.randomUUID();
+            jdbc.update("INSERT INTO evaluation_candidate (id, tenant_id, source_event_id, anonymized_body, body_digest, status, anonymization_rule_version, expires_at) VALUES (?, 'test-p8-tenant-a', ?, '{}'::jsonb, ?, 'PENDING_REVIEW', 'v1', ?)", candidate, UUID.randomUUID(), "d".repeat(64), Timestamp.from(Instant.now().plusSeconds(3600)));
+            jdbc.execute("CREATE FUNCTION fail_review_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit failure'; END $$");
+            jdbc.execute("CREATE TRIGGER fail_review_audit BEFORE INSERT ON evaluation_audit FOR EACH ROW EXECUTE FUNCTION fail_review_audit()");
+            var reviews = new CandidateReviewService(new JdbcEvaluationDatasetRepository(jdbc, new PublicDatasetAnonymizer(new DeterministicAnonymizer("test-p8"))));
+            assertThrows(RuntimeException.class, () -> reviews.review(new CandidateReviewCommand(candidate, "test-p8-tenant-a", "admin", ReviewAction.ACCEPT, Map.of("intent", "x"), Set.of("L"), "x")));
+            assertEquals("PENDING_REVIEW", jdbc.queryForObject("SELECT status FROM evaluation_candidate WHERE id = ?", String.class, candidate));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_candidate_review WHERE candidate_id = ?", Integer.class, candidate));
+        } finally { jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE"); }
     }
 
     @Test

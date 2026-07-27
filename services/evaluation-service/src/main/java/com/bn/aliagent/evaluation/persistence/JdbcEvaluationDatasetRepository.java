@@ -45,15 +45,13 @@ public final class JdbcEvaluationDatasetRepository implements CandidateRepositor
     }
 
     @Override public EvaluationCandidate review(CandidateReviewCommand command, EvaluationCandidate reviewed) {
-        int updated = jdbc.update("UPDATE evaluation_candidate SET status = ?, review_expected = ?::jsonb, review_labels = ?::jsonb WHERE tenant_id = ? AND id = ? AND status = 'PENDING_REVIEW'",
-                reviewed.status().name(), mapJson(reviewed.expected()), labelsJson(reviewed.labels()), command.tenantId(), command.candidateId());
-        if (updated != 1) throw new IllegalStateException("候选不可审核");
-        UUID reviewId = UUID.randomUUID();
-        jdbc.update("INSERT INTO evaluation_candidate_review (id, tenant_id, candidate_id, reviewer_id, action, reason) VALUES (?, ?, ?, ?, ?, ?)",
-                reviewId, command.tenantId(), command.candidateId(), command.reviewerId(), command.action().name(), command.reason());
-        jdbc.update("INSERT INTO evaluation_audit (tenant_id, audit_id, aggregate_type, aggregate_id, event_type, actor_id, event_payload) VALUES (?, ?, 'EVALUATION_CANDIDATE', ?, 'CANDIDATE_REVIEWED', ?, ?::jsonb)",
-                command.tenantId(), UUID.randomUUID(), command.candidateId(), command.reviewerId(), reviewPayload(command));
-        return reviewed;
+        return transactions.execute(status -> {
+            int updated = jdbc.update("UPDATE evaluation_candidate SET status = ?, review_expected = ?::jsonb, review_labels = ?::jsonb WHERE tenant_id = ? AND id = ? AND status = 'PENDING_REVIEW'", reviewed.status().name(), mapJson(reviewed.expected()), labelsJson(reviewed.labels()), command.tenantId(), command.candidateId());
+            if (updated != 1) throw new IllegalStateException("候选不可审核");
+            jdbc.update("INSERT INTO evaluation_candidate_review (id, tenant_id, candidate_id, reviewer_id, action, reason) VALUES (?, ?, ?, ?, ?, ?)", UUID.randomUUID(), command.tenantId(), command.candidateId(), command.reviewerId(), command.action().name(), command.reason());
+            jdbc.update("INSERT INTO evaluation_audit (tenant_id, audit_id, aggregate_type, aggregate_id, event_type, actor_id, event_payload) VALUES (?, ?, 'EVALUATION_CANDIDATE', ?, 'CANDIDATE_REVIEWED', ?, ?::jsonb)", command.tenantId(), UUID.randomUUID(), command.candidateId(), command.reviewerId(), reviewPayload(command));
+            return reviewed;
+        });
     }
 
     @Override public EvaluationCandidate require(String tenantId, UUID id) {
@@ -61,9 +59,7 @@ public final class JdbcEvaluationDatasetRepository implements CandidateRepositor
                 (rs, row) -> new EvaluationCandidate(id, rs.getString(1), CandidateStatus.valueOf(rs.getString(2)),
                         Optional.ofNullable(rs.getString(3)), rs.getString(4), Instant.now(), jsonMap(rs.getString(5)), jsonLabels(rs.getString(6)), ""), tenantId, id);
         if (!values.isEmpty()) return values.get(0);
-        Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_candidate WHERE id = ?", Integer.class, id);
-        if (exists != null && exists > 0) throw new SecurityException("跨租户访问被拒绝");
-        throw new IllegalArgumentException("候选不存在");
+        throw new SecurityException("候选访问被拒绝");
     }
 
     @Override public Collection<EvaluationCandidate> all() { return List.of(); }
@@ -105,27 +101,23 @@ public final class JdbcEvaluationDatasetRepository implements CandidateRepositor
 
     @Override public PublishedDatasetVersion requirePublished(String tenantId, UUID datasetVersionId) {
         List<PublishedDatasetVersion> versions = jdbc.query("SELECT tenant_id, dataset_id, version_number, content_digest, visibility FROM evaluation_dataset_version WHERE tenant_id = ? AND id = ?",
-                (rs, row) -> new PublishedDatasetVersion(datasetVersionId, rs.getString(1), UUID.fromString(rs.getString(2)), rs.getInt(3), rs.getString(4), "PUBLIC".equals(rs.getString(5)), List.of()), tenantId, datasetVersionId);
+                (rs, row) -> new PublishedDatasetVersion(datasetVersionId, rs.getString(1), UUID.fromString(rs.getString(2)), rs.getInt(3), rs.getString(4), "PUBLIC".equals(rs.getString(5)), samples(tenantId, datasetVersionId)), tenantId, datasetVersionId);
         if (!versions.isEmpty()) return versions.get(0);
-        Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_dataset_version WHERE id = ?", Integer.class, datasetVersionId);
-        if (exists != null && exists > 0) throw new SecurityException("跨租户访问被拒绝");
-        throw new IllegalArgumentException("评测集版本不存在");
+        throw new SecurityException("评测集版本访问被拒绝");
     }
 
     private EvaluationDataset requireEditableDraft(String tenantId, UUID draftId) {
         List<EvaluationDataset> drafts = jdbc.query("SELECT name, state FROM evaluation_dataset WHERE tenant_id = ? AND id = ?", (rs, row) ->
                 new EvaluationDataset(draftId, tenantId, rs.getString(1), "PUBLISHED".equals(rs.getString(2)), List.of()), tenantId, draftId);
         if (drafts.isEmpty()) {
-            Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_dataset WHERE id = ?", Integer.class, draftId);
-            if (exists != null && exists > 0) throw new SecurityException("跨租户访问被拒绝");
-            throw new IllegalArgumentException("评测集不存在");
+            throw new SecurityException("评测集访问被拒绝");
         }
         if (drafts.get(0).published()) throw new IllegalStateException("已发布草稿不可编辑");
         return drafts.get(0);
     }
     private EvaluationDataset requireEditableDraftLocked(String tenantId, UUID draftId) {
         List<EvaluationDataset> drafts = jdbc.query("SELECT name, state FROM evaluation_dataset WHERE tenant_id = ? AND id = ? FOR UPDATE", (rs, row) -> new EvaluationDataset(draftId, tenantId, rs.getString(1), "PUBLISHED".equals(rs.getString(2)), List.of()), tenantId, draftId);
-        if (drafts.isEmpty()) { Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_dataset WHERE id = ?", Integer.class, draftId); if (exists != null && exists > 0) throw new SecurityException("跨租户访问被拒绝"); throw new IllegalArgumentException("评测集不存在"); }
+        if (drafts.isEmpty()) throw new SecurityException("评测集访问被拒绝");
         if (drafts.get(0).published()) throw new IllegalStateException("已发布草稿不可编辑");
         return drafts.get(0);
     }
@@ -133,6 +125,9 @@ public final class JdbcEvaluationDatasetRepository implements CandidateRepositor
     private static String reviewPayload(CandidateReviewCommand command) {
         return "{\"action\":\"" + command.action().name() + "\",\"reason\":\"" + escape(command.reason()) + "\",\"expected\":\"" + escape(String.valueOf(command.expected())) + "\",\"labels\":\"" + escape(String.valueOf(command.labels())) + "\"}";
     }
+    private List<DatasetSampleSnapshot> samples(String tenantId, UUID versionId) { return jdbc.query("SELECT sample_json::text FROM evaluation_sample_snapshot WHERE tenant_id = ? AND dataset_version_id = ? ORDER BY id", (rs, row) -> { Map<String, Object> value = jsonMap(rs.getString(1)); return new DatasetSampleSnapshot(null, String.valueOf(value.get("input")), mapValue(value.get("expected")), labelsValue(value.get("labels")), Set.of(), Set.of(), Map.of(), Set.of(), Set.of(), Set.of(), false, Map.of(), Set.of()); }, tenantId, versionId); }
+    @SuppressWarnings("unchecked") private static Map<String, Object> mapValue(Object value) { return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of(); }
+    @SuppressWarnings("unchecked") private static Set<String> labelsValue(Object value) { return value instanceof Collection<?> values ? ((Collection<Object>) values).stream().map(String::valueOf).collect(java.util.stream.Collectors.toSet()) : Set.of(); }
     private static String escape(String value) { return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\""); }
     private static Map<String, Object> jsonMap(String value) { return read(value, new TypeReference<>() { }, Map.of()); }
     private static Set<String> jsonLabels(String value) { return Set.copyOf(read(value, new TypeReference<>() { }, List.<String>of())); }
