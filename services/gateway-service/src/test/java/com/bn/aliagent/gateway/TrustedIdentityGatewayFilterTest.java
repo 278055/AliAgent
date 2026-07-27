@@ -71,6 +71,17 @@ class TrustedIdentityGatewayFilterTest {
     }
 
     @Test
+    void evaluationRouteIsIssuedForTheEvaluationService() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/evaluation/datasets/" + java.util.UUID.randomUUID() + "/publish")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF"))).build());
+        AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString()).filter(exchange, value -> { forwarded.set(value.getRequest().getHeaders()); return reactor.core.publisher.Mono.empty(); }).block();
+        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7), "evaluation-service", "POST:" + exchange.getRequest().getPath().value());
+    }
+
+    @Test
     void 普通会话请求不依赖知识快照服务() {
         String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
         String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";

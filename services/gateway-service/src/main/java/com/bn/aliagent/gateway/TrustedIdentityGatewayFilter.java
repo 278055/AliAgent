@@ -47,7 +47,8 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
             String traceId = UUID.randomUUID().toString();
             String requestId = UUID.randomUUID().toString();
             String scope = exchange.getRequest().getMethod().name() + ":" + path;
-            String audience = path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service" : "conversation-service";
+            String audience = path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service"
+                    : path.startsWith("/api/v1/evaluation/") ? "evaluation-service" : "conversation-service";
             String snapshotId = requiresKnowledgeSnapshot(path) ? snapshots.issue(identity, traceId, requestId) : null;
             var request = exchange.getRequest().mutate().headers(headers -> {
                 INTERNAL_HEADERS.forEach(headers::remove);
