@@ -33,7 +33,7 @@ class EvaluationSchemaV3IntegrationTest {
                 .load();
 
         flyway.migrate();
-        assertEquals("4", flyway.info().current().getVersion().getVersion());
+        assertEquals("5", flyway.info().current().getVersion().getVersion());
         List<String> tables = List.of(
                 "evaluation_dataset_draft_sample",
                 "evaluation_run_manifest",
@@ -49,6 +49,7 @@ class EvaluationSchemaV3IntegrationTest {
         assertTrue(columnExists("evaluation_gate_proof", "canonical_payload"));
         assertRejectsCrossTenantDatasetReference();
         assertRejectsCrossTenantDatasetVersionReference();
+        assertRejectsCrossTenantRunDatasetVersionReference();
     }
 
     @AfterEach
@@ -92,6 +93,23 @@ class EvaluationSchemaV3IntegrationTest {
                     + ".evaluation_dataset_version (id, tenant_id, dataset_id, version_number, content_digest, visibility) "
                     + "VALUES ('" + UUID.randomUUID() + "', 'tenant-b-v2', '" + datasetId
                     + "', 1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'PRIVATE')"));
+        }
+    }
+
+    private void assertRejectsCrossTenantRunDatasetVersionReference() throws SQLException {
+        UUID datasetId = UUID.randomUUID();
+        UUID datasetVersionId = UUID.randomUUID();
+        try (Connection connection = openConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset "
+                    + "(id, tenant_id, name, state) VALUES ('" + datasetId + "', 'tenant-a-run', 'dataset-run', 'DRAFT')");
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset_version "
+                    + "(id, tenant_id, dataset_id, version_number, content_digest, visibility) VALUES ('"
+                    + datasetVersionId + "', 'tenant-a-run', '" + datasetId
+                    + "', 1, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'PRIVATE')");
+            assertThrows(SQLException.class, () -> statement.execute("INSERT INTO " + schema
+                    + ".evaluation_run (id, tenant_id, dataset_version_id, manifest_digest, mode, status) VALUES ('"
+                    + UUID.randomUUID() + "', 'tenant-b-run', '" + datasetVersionId
+                    + "', 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', 'FULL', 'PENDING')"));
         }
     }
 
