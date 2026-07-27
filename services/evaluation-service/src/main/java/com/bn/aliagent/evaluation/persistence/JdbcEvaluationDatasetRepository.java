@@ -13,6 +13,8 @@ import com.bn.aliagent.evaluation.anonymization.PublicDatasetAnonymizer;
 import com.bn.aliagent.evaluation.dataset.EvaluationDataset;
 import com.bn.aliagent.evaluation.dataset.EvaluationDatasetRepository;
 import com.bn.aliagent.evaluation.dataset.PublishedDatasetVersion;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -28,6 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** PostgreSQL 评测审核和数据集工作流仓储，所有读写均按租户过滤。 */
 public final class JdbcEvaluationDatasetRepository implements CandidateRepository, ReviewingCandidateRepository, EvaluationDatasetRepository {
+    private static final ObjectMapper JSON = new ObjectMapper();
     private final JdbcTemplate jdbc;
     private final PublicDatasetAnonymizer publicAnonymizer;
     private final TransactionTemplate transactions;
@@ -131,11 +134,12 @@ public final class JdbcEvaluationDatasetRepository implements CandidateRepositor
         return "{\"action\":\"" + command.action().name() + "\",\"reason\":\"" + escape(command.reason()) + "\",\"expected\":\"" + escape(String.valueOf(command.expected())) + "\",\"labels\":\"" + escape(String.valueOf(command.labels())) + "\"}";
     }
     private static String escape(String value) { return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\""); }
-    private static Map<String, Object> jsonMap(String value) { if (value == null || value.equals("{}")) return Map.of(); int colon = value.indexOf(':'); if (colon < 0) return Map.of(); return Map.of(value.substring(1, colon).replace("\"", "").trim(), value.substring(colon + 1, value.length() - 1).replace("\"", "").trim()); }
-    private static Set<String> jsonLabels(String value) { if (value == null || value.equals("[]")) return Set.of(); return Set.of(value.substring(1, value.length() - 1).replace("\"", "").trim()); }
-    private static String snapshotJson(DatasetSampleSnapshot sample) { return "{\"input\":" + quoted(sample.input()) + ",\"expected\":" + mapJson(sample.expected()) + ",\"labels\":" + labelsJson(sample.labels()) + "}"; }
-    private static String mapJson(Map<String, Object> value) { if (value.isEmpty()) return "{}"; var entry = value.entrySet().iterator().next(); return "{\"" + escape(entry.getKey()) + "\":" + quoted(String.valueOf(entry.getValue())) + "}"; }
-    private static String labelsJson(Set<String> value) { return value.isEmpty() ? "[]" : "[" + quoted(value.iterator().next()) + "]"; }
-    private static String quoted(String value) { return "\"" + escape(value) + "\""; }
+    private static Map<String, Object> jsonMap(String value) { return read(value, new TypeReference<>() { }, Map.of()); }
+    private static Set<String> jsonLabels(String value) { return Set.copyOf(read(value, new TypeReference<>() { }, List.<String>of())); }
+    private static String snapshotJson(DatasetSampleSnapshot sample) { return write(Map.of("input", sample.input(), "expected", sample.expected(), "labels", sample.labels())); }
+    private static String mapJson(Map<String, Object> value) { return write(value); }
+    private static String labelsJson(Set<String> value) { return write(value); }
+    private static String write(Object value) { try { return JSON.writeValueAsString(value); } catch (Exception exception) { throw new IllegalStateException("无法序列化评测元数据", exception); } }
+    private static <T> T read(String value, TypeReference<T> type, T fallback) { try { return value == null ? fallback : JSON.readValue(value, type); } catch (Exception exception) { throw new IllegalStateException("无法读取评测元数据", exception); } }
     private static String digest(List<DatasetSampleSnapshot> samples) { try { return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(samples.toString().getBytes(StandardCharsets.UTF_8))); } catch (Exception exception) { throw new IllegalStateException(exception); } }
 }

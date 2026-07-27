@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.sql.Timestamp;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -43,8 +44,9 @@ class JdbcDatasetWorkflowIntegrationTest {
             EvaluationDatasetService datasets = new EvaluationDatasetService(repository,
                     new PublicDatasetAnonymizer(new DeterministicAnonymizer("test-p8")));
 
-            reviews.review(new CandidateReviewCommand(candidate, "test-p8-tenant-a", "admin", ReviewAction.ACCEPT,
-                    Map.of("intent", "ORDER_QUERY"), Set.of("ORDER"), "test-p8-review"));
+            Map<String, Object> expected = Map.of("intent", "ORDER_QUERY", "constraints", Map.of("region", "CN", "steps", List.of("lookup", "reply")));
+            Set<String> labels = Set.of("ORDER", "PRIORITY");
+            reviews.review(new CandidateReviewCommand(candidate, "test-p8-tenant-a", "admin", ReviewAction.ACCEPT, expected, labels, "test-p8-review"));
             var draft = datasets.createDraft("test-p8-tenant-a", "test-p8-dataset");
             datasets.addCandidate("test-p8-tenant-a", draft.id(), candidate);
             var published = datasets.publish("test-p8-tenant-a", draft.id(), false, null);
@@ -53,8 +55,11 @@ class JdbcDatasetWorkflowIntegrationTest {
             assertThrows(SecurityException.class, () -> datasets.requirePublished("test-p8-tenant-b", published.id()));
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_sample_snapshot", Integer.class));
             String snapshot = jdbc.queryForObject("SELECT sample_json::text FROM evaluation_sample_snapshot", String.class);
-            assertTrue(snapshot.contains("ORDER_QUERY"));
-            assertTrue(snapshot.contains("ORDER"));
+            var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(snapshot);
+            assertEquals(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(expected), json.path("expected"));
+            assertEquals(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(labels), json.path("labels"));
+            assertEquals(expected, repository.require("test-p8-tenant-a", candidate).expected());
+            assertEquals(labels, repository.require("test-p8-tenant-a", candidate).labels());
 
             UUID secondCandidate = UUID.randomUUID();
             jdbc.update("INSERT INTO evaluation_candidate (id, tenant_id, source_event_id, anonymized_body, body_digest, status, anonymization_rule_version, expires_at) VALUES (?, ?, ?, ?::jsonb, ?, 'ACCEPTED', 'test-v1', ?)", secondCandidate, "test-p8-tenant-a", UUID.randomUUID(), "{\"input\":\"second\"}", "c".repeat(64), Timestamp.from(Instant.now().plusSeconds(3600)));
@@ -64,7 +69,7 @@ class JdbcDatasetWorkflowIntegrationTest {
                 var adds = executor.invokeAll(java.util.List.of((Callable<Void>) () -> { datasets.addCandidate("test-p8-tenant-a", concurrentDraft.id(), candidate); return null; }, (Callable<Void>) () -> { datasets.addCandidate("test-p8-tenant-a", concurrentDraft.id(), secondCandidate); return null; }));
                 for (var add : adds) add.get();
                 assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_dataset_draft_sample WHERE draft_id = ?", Integer.class, concurrentDraft.id()));
-                var publishes = executor.invokeAll(java.util.List.of((Callable<Boolean>) () -> { try { datasets.publish("test-p8-tenant-a", concurrentDraft.id(), false, null); return true; } catch (IllegalStateException expected) { return false; } }, (Callable<Boolean>) () -> { try { datasets.publish("test-p8-tenant-a", concurrentDraft.id(), false, null); return true; } catch (IllegalStateException expected) { return false; } }));
+                var publishes = executor.invokeAll(java.util.List.of((Callable<Boolean>) () -> { try { datasets.publish("test-p8-tenant-a", concurrentDraft.id(), false, null); return true; } catch (IllegalStateException ignored) { return false; } }, (Callable<Boolean>) () -> { try { datasets.publish("test-p8-tenant-a", concurrentDraft.id(), false, null); return true; } catch (IllegalStateException ignored) { return false; } }));
                 assertEquals(1, (publishes.get(0).get() ? 1 : 0) + (publishes.get(1).get() ? 1 : 0));
             } finally { executor.shutdownNow(); }
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_dataset_version WHERE dataset_id = ?", Integer.class, concurrentDraft.id()));
@@ -91,6 +96,9 @@ class JdbcDatasetWorkflowIntegrationTest {
             var published = datasets.publish("test-p8-tenant-a", draft.id(), true, com.bn.aliagent.evaluation.anonymization.DatasetShareAuthorization.active("admin", Instant.now()));
             assertTrue(published.publiclyShared());
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_sample_snapshot WHERE sample_json::text LIKE '%13800138000%'", Integer.class));
+            var forbiddenDraft = datasets.createDraft("test-p8-tenant-a", "forbidden-public-dataset");
+            datasets.addCandidate("test-p8-tenant-a", forbiddenDraft.id(), candidate);
+            assertThrows(SecurityException.class, () -> datasets.publish("test-p8-tenant-a", forbiddenDraft.id(), true, null));
         } finally { jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE"); }
     }
 }
