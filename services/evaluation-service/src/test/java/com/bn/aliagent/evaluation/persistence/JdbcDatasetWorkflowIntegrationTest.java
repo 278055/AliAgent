@@ -64,6 +64,11 @@ class JdbcDatasetWorkflowIntegrationTest {
             assertEquals(1, reloaded.samples().size());
             assertEquals(expected, reloaded.samples().get(0).expected());
             assertEquals(labels, reloaded.samples().get(0).labels());
+            assertEquals(candidate, reloaded.samples().get(0).candidateId());
+            assertEquals(published.samples().get(0), reloaded.samples().get(0));
+            var audit = new com.fasterxml.jackson.databind.ObjectMapper().readTree(jdbc.queryForObject("SELECT event_payload::text FROM evaluation_audit", String.class));
+            assertEquals(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(expected), audit.path("expected"));
+            assertTrue(audit.path("labels").isArray());
 
             UUID secondCandidate = UUID.randomUUID();
             jdbc.update("INSERT INTO evaluation_candidate (id, tenant_id, source_event_id, anonymized_body, body_digest, status, anonymization_rule_version, expires_at) VALUES (?, ?, ?, ?::jsonb, ?, 'ACCEPTED', 'test-v1', ?)", secondCandidate, "test-p8-tenant-a", UUID.randomUUID(), "{\"input\":\"second\"}", "c".repeat(64), Timestamp.from(Instant.now().plusSeconds(3600)));

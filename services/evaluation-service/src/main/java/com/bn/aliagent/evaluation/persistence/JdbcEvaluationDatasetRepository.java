@@ -93,7 +93,7 @@ public final class JdbcEvaluationDatasetRepository implements CandidateRepositor
         UUID versionId = UUID.randomUUID();
         jdbc.update("INSERT INTO evaluation_dataset_version (id, tenant_id, dataset_id, version_number, content_digest, visibility) VALUES (?, ?, ?, ?, ?, ?)",
                 versionId, tenantId, draftId, version, digest, publiclyShared ? "PUBLIC" : "PRIVATE");
-        for (DatasetSampleSnapshot sample : samples) jdbc.update("INSERT INTO evaluation_sample_snapshot (id, tenant_id, dataset_version_id, sample_json) VALUES (?, ?, ?, ?::jsonb)", UUID.randomUUID(), tenantId, versionId, snapshotJson(sample));
+        for (DatasetSampleSnapshot sample : samples) jdbc.update("INSERT INTO evaluation_sample_snapshot (id, tenant_id, dataset_version_id, sample_json, candidate_id, snapshot_payload) VALUES (?, ?, ?, ?::jsonb, ?, ?::jsonb)", UUID.randomUUID(), tenantId, versionId, snapshotJson(sample), sample.candidateId(), fullSnapshotJson(sample));
         int updated = jdbc.update("UPDATE evaluation_dataset SET state = 'PUBLISHED' WHERE tenant_id = ? AND id = ? AND state = 'DRAFT'", tenantId, draftId);
         if (updated != 1) throw new IllegalStateException("已发布草稿不可编辑");
         return new PublishedDatasetVersion(versionId, tenantId, draft.id(), version, digest, publiclyShared, samples);
@@ -122,16 +122,17 @@ public final class JdbcEvaluationDatasetRepository implements CandidateRepositor
         return drafts.get(0);
     }
 
-    private static String reviewPayload(CandidateReviewCommand command) {
-        return "{\"action\":\"" + command.action().name() + "\",\"reason\":\"" + escape(command.reason()) + "\",\"expected\":\"" + escape(String.valueOf(command.expected())) + "\",\"labels\":\"" + escape(String.valueOf(command.labels())) + "\"}";
-    }
-    private List<DatasetSampleSnapshot> samples(String tenantId, UUID versionId) { return jdbc.query("SELECT sample_json::text FROM evaluation_sample_snapshot WHERE tenant_id = ? AND dataset_version_id = ? ORDER BY id", (rs, row) -> { Map<String, Object> value = jsonMap(rs.getString(1)); return new DatasetSampleSnapshot(null, String.valueOf(value.get("input")), mapValue(value.get("expected")), labelsValue(value.get("labels")), Set.of(), Set.of(), Map.of(), Set.of(), Set.of(), Set.of(), false, Map.of(), Set.of()); }, tenantId, versionId); }
+    private static String reviewPayload(CandidateReviewCommand command) { return write(Map.of("action", command.action().name(), "reason", command.reason() == null ? "" : command.reason(), "expected", command.expected() == null ? Map.of() : command.expected(), "labels", command.labels() == null ? Set.of() : command.labels())); }
+    private List<DatasetSampleSnapshot> samples(String tenantId, UUID versionId) { return jdbc.query("SELECT candidate_id, sample_json::text, snapshot_payload::text FROM evaluation_sample_snapshot WHERE tenant_id = ? AND dataset_version_id = ? ORDER BY id", (rs, row) -> fullSnapshot(rs.getObject(1, UUID.class), jsonMap(rs.getString(2)), jsonMap(rs.getString(3))), tenantId, versionId); }
     @SuppressWarnings("unchecked") private static Map<String, Object> mapValue(Object value) { return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of(); }
     @SuppressWarnings("unchecked") private static Set<String> labelsValue(Object value) { return value instanceof Collection<?> values ? ((Collection<Object>) values).stream().map(String::valueOf).collect(java.util.stream.Collectors.toSet()) : Set.of(); }
     private static String escape(String value) { return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\""); }
     private static Map<String, Object> jsonMap(String value) { return read(value, new TypeReference<>() { }, Map.of()); }
     private static Set<String> jsonLabels(String value) { return Set.copyOf(read(value, new TypeReference<>() { }, List.<String>of())); }
     private static String snapshotJson(DatasetSampleSnapshot sample) { return write(Map.of("input", sample.input(), "expected", sample.expected(), "labels", sample.labels())); }
+    private static String fullSnapshotJson(DatasetSampleSnapshot sample) { return write(Map.of("allowedTools", sample.allowedTools(), "prohibitedTools", sample.prohibitedTools(), "parameterConstraints", sample.parameterConstraints(), "citationRequirements", sample.citationRequirements(), "factAssertions", sample.factAssertions(), "safetyLabels", sample.safetyLabels(), "expectedHumanHandoff", sample.expectedHumanHandoff(), "weights", sample.weights(), "applicableMetrics", sample.applicableMetrics())); }
+    private static DatasetSampleSnapshot fullSnapshot(UUID candidateId, Map<String, Object> sample, Map<String, Object> value) { return new DatasetSampleSnapshot(candidateId, String.valueOf(sample.get("input")), mapValue(sample.get("expected")), labelsValue(sample.get("labels")), labelsValue(value.get("allowedTools")), labelsValue(value.get("prohibitedTools")), mapValue(value.get("parameterConstraints")), labelsValue(value.get("citationRequirements")), labelsValue(value.get("factAssertions")), labelsValue(value.get("safetyLabels")), Boolean.TRUE.equals(value.get("expectedHumanHandoff")), doubleMap(value.get("weights")), labelsValue(value.get("applicableMetrics"))); }
+    @SuppressWarnings("unchecked") private static Map<String, Double> doubleMap(Object value) { if (!(value instanceof Map<?, ?> map)) return Map.of(); return ((Map<Object, Object>) map).entrySet().stream().collect(java.util.stream.Collectors.toMap(e -> String.valueOf(e.getKey()), e -> ((Number) e.getValue()).doubleValue())); }
     private static String mapJson(Map<String, Object> value) { return write(value); }
     private static String labelsJson(Set<String> value) { return write(value); }
     private static String write(Object value) { try { return JSON.writeValueAsString(value); } catch (Exception exception) { throw new IllegalStateException("无法序列化评测元数据", exception); } }
