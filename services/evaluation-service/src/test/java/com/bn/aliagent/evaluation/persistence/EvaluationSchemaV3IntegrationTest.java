@@ -2,11 +2,13 @@ package com.bn.aliagent.evaluation.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
@@ -28,11 +30,25 @@ class EvaluationSchemaV3IntegrationTest {
                 .defaultSchema(schema)
                 .createSchemas(true)
                 .locations("filesystem:src/main/resources/db/migration")
+                .target("3")
                 .load();
 
-        assertEquals(3, flyway.migrate().migrationsExecuted);
-        assertTrue(columnExists("evaluation_dataset_draft_sample", "tenant_id"));
+        flyway.migrate();
+        assertEquals("3", flyway.info().current().getVersion().getVersion());
+        List<String> tables = List.of(
+                "evaluation_dataset_draft_sample",
+                "evaluation_run_manifest",
+                "evaluation_metric_evidence",
+                "evaluation_dashscope_approval",
+                "evaluation_budget_ledger",
+                "evaluation_gate_proof",
+                "evaluation_audit");
+        for (String table : tables) {
+            assertTrue(columnExists(table, "tenant_id"));
+        }
+        assertTrue(columnExists("evaluation_dataset_draft_sample", "dataset_id"));
         assertTrue(columnExists("evaluation_gate_proof", "canonical_payload"));
+        assertRejectsCrossTenantDatasetReference();
     }
 
     @AfterEach
@@ -52,6 +68,18 @@ class EvaluationSchemaV3IntegrationTest {
             try (var resultSet = statement.executeQuery()) {
                 return resultSet.next();
             }
+        }
+    }
+
+    private void assertRejectsCrossTenantDatasetReference() throws SQLException {
+        UUID datasetId = UUID.randomUUID();
+        try (Connection connection = openConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset "
+                    + "(id, tenant_id, name, state) VALUES ('" + datasetId + "', 'tenant-a', 'dataset', 'DRAFT')");
+            assertThrows(SQLException.class, () -> statement.execute("INSERT INTO " + schema
+                    + ".evaluation_dataset_draft_sample (tenant_id, draft_id, sample_id, dataset_id, sample_payload, sample_order) "
+                    + "VALUES ('tenant-b', '" + UUID.randomUUID() + "', '" + UUID.randomUUID() + "', '" + datasetId
+                    + "', '{}'::jsonb, 1)"));
         }
     }
 
