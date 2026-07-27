@@ -3,6 +3,7 @@ package com.bn.aliagent.evaluation.persistence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bn.aliagent.evaluation.gate.GateController;
 import com.bn.aliagent.evaluation.gate.GateDecision;
@@ -58,6 +59,9 @@ class JdbcRunAndGateIntegrationTest {
             assertEquals(manifest.digest(), jdbc.queryForObject("SELECT manifest_digest FROM evaluation_run WHERE tenant_id = ? AND id = ?", String.class, TENANT, runId));
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", Integer.class, TENANT, runId));
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", Integer.class, TENANT, runId));
+            assertThrows(Exception.class, () -> jdbc.update("UPDATE evaluation_run_manifest SET model_name = 'changed' WHERE tenant_id = ? AND run_id = ?", TENANT, runId));
+            assertThrows(Exception.class, () -> jdbc.update("UPDATE evaluation_run SET manifest_digest = ? WHERE tenant_id = ? AND id = ?", "b".repeat(64), TENANT, runId));
+            assertThrows(IllegalStateException.class, () -> runs.storeResult(TENANT, runId, fixture(), new MockReplayRunner().replay(TENANT, manifest, fixture())));
 
             KeyPair pair = KeyPairGenerator.getInstance("EC").generateKeyPair();
             GateDecisionSigner signer = new GateDecisionSigner(keyId -> new GateDecisionSigner.SigningKey(keyId, pair.getPrivate(), "SHA256withECDSA"));
@@ -75,8 +79,21 @@ class JdbcRunAndGateIntegrationTest {
             GateDecision.GateProof storedProof = decisions.findProof(TENANT, issued.proof().proofId()).orElseThrow();
             assertTrue(verifier.verify(storedProof, target, "gate-v1").accepted());
             assertFalse(decisions.findProof("other-tenant", issued.proof().proofId()).isPresent());
+            assertFalse(decisions.verify(TENANT, new GateDecision.GateProof(UUID.randomUUID(), storedProof.canonicalPayload(), storedProof.signature(), storedProof.keyId()), target, "gate-v1", verifier));
+            assertFalse(decisions.verify("other-tenant", storedProof, target, "gate-v1", verifier));
+            assertFalse(decisions.verify(TENANT, new GateDecision.GateProof(storedProof.proofId(), storedProof.canonicalPayload() + "x", storedProof.signature(), storedProof.keyId()), target, "gate-v1", verifier));
+            GateController.IssuedDecision rollbackProof = controller.issue(TENANT, new GateDecision.GateTarget(TENANT, "PROMPT", UUID.randomUUID(), manifest.digest()), new GatePolicy("gate-rollback", Map.of(), true), results, "key-1", 600);
+            assertThrows(Exception.class, () -> decisions.revoke(TENANT, rollbackProof.proof().proofId(), null));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_gate_proof WHERE tenant_id = ? AND proof_id = ? AND revoked_at IS NOT NULL", Integer.class, TENANT, rollbackProof.proof().proofId()));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_gate_revocation revocation JOIN evaluation_gate_proof proof ON revocation.decision_id = proof.decision_id AND revocation.tenant_id = proof.tenant_id WHERE proof.tenant_id = ? AND proof.proof_id = ?", Integer.class, TENANT, rollbackProof.proof().proofId()));
             decisions.revoke(TENANT, issued.proof().proofId(), "test revoke");
             assertFalse(verifier.verify(storedProof, target, "gate-v1").accepted());
+
+            GateDecision.GateTarget failedTarget = new GateDecision.GateTarget(TENANT, "PROMPT", UUID.randomUUID(), manifest.digest());
+            assertThrows(GateController.GateRejectedException.class, () -> controller.issue(TENANT, failedTarget, new GatePolicy("gate-fail", Map.of(), true),
+                    new GateResultPort.GateEvaluationResults(TENANT, runId, manifest.digest(), "baseline", datasetVersionId.toString(), manifest.scoringPolicyVersion(), false, List.of(), Map.of(), "result", NOW), "key-1", 600));
+            assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_gate_decision WHERE tenant_id = ? AND status = 'FAIL'", Integer.class, TENANT));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_gate_proof proof JOIN evaluation_gate_decision decision ON proof.decision_id = decision.id AND proof.tenant_id = decision.tenant_id WHERE proof.tenant_id = ? AND decision.status = 'FAIL'", Integer.class, TENANT));
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
         }

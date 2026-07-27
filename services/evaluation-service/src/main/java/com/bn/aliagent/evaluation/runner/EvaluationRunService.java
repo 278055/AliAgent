@@ -4,7 +4,6 @@ import com.bn.aliagent.evaluation.replay.EvaluationManifest;
 import com.bn.aliagent.evaluation.replay.ReplayFixture;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 编排已发布快照的离线回放，不接收草稿或外部凭证。 */
 public final class EvaluationRunService {
@@ -26,7 +25,6 @@ public final class EvaluationRunService {
         return datasets.published(tenantId, manifest.datasetVersionId()).stream().map(fixture -> runner.replay(tenantId, manifest, fixture)).toList();
     }
 
-    @Transactional
     public UUID startMock(String tenantId, EvaluationManifest manifest) {
         if (repository == null) throw new IllegalStateException("evaluation run repository is not configured");
         UUID runId = repository.create(tenantId, manifest, "MOCK");

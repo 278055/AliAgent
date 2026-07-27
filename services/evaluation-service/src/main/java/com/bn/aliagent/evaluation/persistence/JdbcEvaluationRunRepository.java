@@ -21,6 +21,8 @@ public final class JdbcEvaluationRunRepository implements EvaluationRunRepositor
         return runId;
     }
     @Override public void storeResult(String tenantId, UUID runId, ReplayFixture fixture, ReplayResult result) {
+        Integer active = jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_run WHERE tenant_id = ? AND id = ? AND status = 'RUNNING'", Integer.class, tenantId, runId);
+        if (active == null || active != 1) throw new IllegalStateException("evaluation run is not running");
         jdbc.update("INSERT INTO evaluation_result (id, tenant_id, run_id, sample_id, evidence_json) VALUES (?, ?, ?, ?, CAST(? AS jsonb))", UUID.randomUUID(), tenantId, runId, fixture.sampleId(), write(result));
         jdbc.update("INSERT INTO evaluation_metric_evidence (tenant_id, evidence_id, run_id, metric_name, metric_value, evidence_payload) VALUES (?, ?, ?, 'replay', 1, CAST(? AS jsonb))", tenantId, UUID.randomUUID(), runId, write(Map.of("sampleId", fixture.sampleId(), "result", result)));
     }
