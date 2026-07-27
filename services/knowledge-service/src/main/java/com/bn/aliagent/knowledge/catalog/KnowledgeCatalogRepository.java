@@ -10,9 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("database")
 public class KnowledgeCatalogRepository {
     private final JdbcTemplate jdbcTemplate;
+    private final KnowledgeGateDecisionPort gates;
 
-    public KnowledgeCatalogRepository(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public KnowledgeCatalogRepository(JdbcTemplate jdbcTemplate, KnowledgeGateDecisionPort gates) {
+        this.jdbcTemplate = jdbcTemplate; this.gates = gates;
     }
 
     public KnowledgeVersionState versionState(UUID versionId, String tenantId) {
@@ -21,7 +22,8 @@ public class KnowledgeCatalogRepository {
     }
 
     @Transactional
-    public void publish(UUID versionId, String tenantId) {
+    public void publish(UUID versionId, String tenantId, String manifestDigest, String policyVersion, String proof) {
+        gates.requirePass(tenantId, versionId, manifestDigest, policyVersion, proof);
         VersionTransitionPolicy.requirePublishable(versionState(versionId, tenantId));
         jdbcTemplate.update("UPDATE knowledge_version SET state = 'PUBLISHED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?", versionId, tenantId);
     }

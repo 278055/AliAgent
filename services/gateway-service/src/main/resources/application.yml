@@ -16,6 +16,10 @@ spring:
           uri: ${ORCHESTRATION_HTTP_URI:http://localhost:8082}
           predicates:
             - Path=/api/v1/copilot/**
+        - id: evaluation-api
+          uri: ${EVALUATION_HTTP_URI:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/evaluation/**
         - id: conversation-api
           uri: ${CONVERSATION_HTTP_URI:http://localhost:8081}
           predicates:

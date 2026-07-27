@@ -16,13 +16,13 @@ class VersionAdministrationController {
     VersionAdministrationController(VersionGovernanceService versions) { this.versions = versions; }
 
     @PostMapping("/publish") @ResponseStatus(HttpStatus.ACCEPTED)
-    void publish(@RequestBody PublishRequest request) { versions.publish(new ManagedVersion(UUID.randomUUID(), request.type(), request.versionName(), "PUBLISHED")); }
+    void publish(@RequestBody PublishRequest request) { versions.publish(request.tenantId(), new ManagedVersion(UUID.randomUUID(), request.type(), request.versionName(), "PUBLISHED"), request.manifestDigest(), request.policyVersion(), request.gateProof()); }
     @PostMapping("/assign") @ResponseStatus(HttpStatus.ACCEPTED)
-    void assign(@RequestBody AssignmentRequest request) { versions.assign(new TenantVersionAssignment(request.tenantId(), request.type(), request.versionId(), request.rolloutPercentage(), "ACTIVE")); }
+    void assign(@RequestBody AssignmentRequest request) { versions.assign(new TenantVersionAssignment(request.tenantId(), request.type(), request.versionId(), request.rolloutPercentage(), "ACTIVE"), request.manifestDigest(), request.policyVersion(), request.gateProof()); }
     @PostMapping("/rollback") @ResponseStatus(HttpStatus.ACCEPTED)
     void rollback(@RequestBody RollbackRequest request) { versions.rollback(request.type(), request.versionId()); }
 
-    record PublishRequest(VersionType type, String versionName) { }
-    record AssignmentRequest(String tenantId, VersionType type, UUID versionId, int rolloutPercentage) { }
+    record PublishRequest(String tenantId, VersionType type, String versionName, String manifestDigest, String policyVersion, String gateProof) { }
+    record AssignmentRequest(String tenantId, VersionType type, UUID versionId, int rolloutPercentage, String manifestDigest, String policyVersion, String gateProof) { }
     record RollbackRequest(VersionType type, UUID versionId) { }
 }

@@ -1,0 +1,15 @@
+openapi: 3.0.3
+info:
+  title: AliAgent Evaluation API
+  version: v1
+paths:
+  /api/v1/evaluation/candidates:
+    get: { summary: List anonymized candidates, responses: { '200': { description: OK } } }
+  /api/v1/evaluation/datasets:
+    post: { summary: Create evaluation dataset draft, responses: { '202': { description: Accepted } } }
+  /api/v1/evaluation/runs:
+    post: { summary: Start an immutable evaluation run, responses: { '202': { description: Accepted } } }
+  /api/v1/evaluation/comparisons:
+    get: { summary: Compare equivalent evaluation runs, responses: { '200': { description: OK } } }
+  /api/v1/evaluation/gate-decisions:
+    post: { summary: Evaluate and issue a PASS gate decision, responses: { '201': { description: Created } } }
