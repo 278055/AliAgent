@@ -21,7 +21,7 @@ public final class GateController {
         }
         Instant issuedAt = clock.instant();
         GateDecision decision = new GateDecision(java.util.UUID.randomUUID(), target, results.baselineDigest(), results.datasetVersion(),
-                results.scoringPolicyVersion(), policy.version(), results.evaluationTaskId(), results.resultDigest(), issuedAt, issuedAt.plusSeconds(validitySeconds));
+                results.scoringPolicyVersion(), policy.version(), results.evaluationTaskId(), results.resultDigest(), outcome.status(), issuedAt, issuedAt.plusSeconds(validitySeconds));
         return new IssuedDecision(decision, signer.sign(decision, keyId));
     }
 

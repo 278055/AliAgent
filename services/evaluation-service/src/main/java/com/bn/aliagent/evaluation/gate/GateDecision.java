@@ -5,14 +5,14 @@ import java.util.UUID;
 
 public record GateDecision(UUID decisionId, GateTarget target, String baselineDigest, String datasetVersion,
         String scoringPolicyVersion, String gatePolicyVersion, UUID evaluationTaskId, String resultDigest,
-        Instant issuedAt, Instant expiresAt) {
+        GateEvaluationService.GateStatus gateStatus, Instant issuedAt, Instant expiresAt) {
     public GateDecision {
-        if (issuedAt == null || expiresAt == null || !expiresAt.isAfter(issuedAt)) {
+        if (gateStatus == null || issuedAt == null || expiresAt == null || !expiresAt.isAfter(issuedAt)) {
             throw new IllegalArgumentException("证明有效期无效");
         }
     }
     public GateDecision withExpiresAt(Instant value) { return new GateDecision(decisionId, target, baselineDigest, datasetVersion,
-            scoringPolicyVersion, gatePolicyVersion, evaluationTaskId, resultDigest, issuedAt, value); }
+            scoringPolicyVersion, gatePolicyVersion, evaluationTaskId, resultDigest, gateStatus, issuedAt, value); }
 
     public record GateTarget(String tenantId, String artifactType, UUID artifactVersionId, String manifestDigest) { }
     public record GateProof(UUID proofId, String canonicalPayload, String signature, String keyId) { }

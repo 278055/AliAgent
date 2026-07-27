@@ -30,7 +30,7 @@ public final class GateDecisionSigner {
         return String.join("\n", "decisionId=" + value.decisionId(), "tenantId=" + target.tenantId(), "artifactType=" + target.artifactType(),
                 "artifactVersionId=" + target.artifactVersionId(), "manifestDigest=" + target.manifestDigest(), "baselineDigest=" + value.baselineDigest(),
                 "datasetVersion=" + value.datasetVersion(), "scoringPolicyVersion=" + value.scoringPolicyVersion(), "gatePolicyVersion=" + value.gatePolicyVersion(),
-                "evaluationTaskId=" + value.evaluationTaskId(), "resultDigest=" + value.resultDigest(), "issuedAt=" + value.issuedAt(), "expiresAt=" + value.expiresAt());
+                "evaluationTaskId=" + value.evaluationTaskId(), "resultDigest=" + value.resultDigest(), "gateStatus=" + value.gateStatus(), "issuedAt=" + value.issuedAt(), "expiresAt=" + value.expiresAt());
     }
 
     public interface SigningKeyProvider { SigningKey get(String keyId); }

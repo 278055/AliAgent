@@ -28,7 +28,7 @@ class GateDecisionSignerTest {
         verifier = new GateDecisionVerifier(Map.of("key-1", new GateDecisionVerifier.VerificationKey(pair.getPublic(), "SHA256withECDSA")),
                 proofId -> false, Clock.fixed(NOW, ZoneOffset.UTC));
         decision = new GateDecision(UUID.randomUUID(), new GateDecision.GateTarget("tenant-a", "PROMPT", UUID.randomUUID(), "manifest-sha"),
-                "baseline-sha", "dataset-v1", "scoring-v1", "policy-v1", UUID.randomUUID(), "result-sha", NOW, NOW.plusSeconds(600));
+                "baseline-sha", "dataset-v1", "scoring-v1", "policy-v1", UUID.randomUUID(), "result-sha", GateEvaluationService.GateStatus.PASS, NOW, NOW.plusSeconds(600));
     }
 
     @Test
@@ -36,6 +36,13 @@ class GateDecisionSignerTest {
         GateDecision.GateProof proof = signer.sign(decision, "key-1");
 
         assertTrue(verifier.verify(proof, decision.target(), "policy-v1").accepted());
+    }
+
+    @Test
+    void proof明确携带且验签方强制要求通过判定() {
+        GateDecision.GateProof proof = signer.sign(decision, "key-1");
+
+        assertTrue(proof.canonicalPayload().contains("gateStatus=PASS"));
     }
 
     @Test
@@ -51,7 +58,7 @@ class GateDecisionSignerTest {
         GateDecision.GateProof proof = signer.sign(decision, "key-1");
         GateDecision expired = new GateDecision(decision.decisionId(), decision.target(), decision.baselineDigest(), decision.datasetVersion(),
                 decision.scoringPolicyVersion(), decision.gatePolicyVersion(), decision.evaluationTaskId(), decision.resultDigest(),
-                NOW.minusSeconds(1_200), NOW.minusSeconds(1));
+                decision.gateStatus(), NOW.minusSeconds(1_200), NOW.minusSeconds(1));
         GateDecision.GateProof expiredProof = signer.sign(expired, "key-1");
         GateDecisionVerifier revoked = new GateDecisionVerifier(Map.of("key-1", new GateDecisionVerifier.VerificationKey(
                 pair.getPublic(), "SHA256withECDSA")), proofId -> true, Clock.fixed(NOW, ZoneOffset.UTC));

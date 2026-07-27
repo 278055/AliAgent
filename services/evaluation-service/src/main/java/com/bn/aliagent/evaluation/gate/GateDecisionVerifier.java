@@ -22,7 +22,7 @@ public final class GateDecisionVerifier {
             if (key == null || revocations.isRevoked(proof.proofId()) || !signatureMatches(proof, key)) return Verification.reject();
             Map<String, String> payload = proof.canonicalPayload().lines().map(line -> line.split("=", 2)).filter(parts -> parts.length == 2)
                     .collect(java.util.stream.Collectors.toMap(parts -> parts[0], parts -> parts[1], (left, right) -> left));
-            return Instant.parse(payload.get("expiresAt")).isAfter(clock.instant()) && targetMatches(payload, target) && policyVersion.equals(payload.get("gatePolicyVersion"))
+            return "PASS".equals(payload.get("gateStatus")) && Instant.parse(payload.get("expiresAt")).isAfter(clock.instant()) && targetMatches(payload, target) && policyVersion.equals(payload.get("gatePolicyVersion"))
                     ? Verification.accept() : Verification.reject();
         } catch (Exception exception) { return Verification.reject(); }
     }
