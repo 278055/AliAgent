@@ -30,11 +30,10 @@ class EvaluationSchemaV3IntegrationTest {
                 .defaultSchema(schema)
                 .createSchemas(true)
                 .locations("filesystem:src/main/resources/db/migration")
-                .target("3")
                 .load();
 
         flyway.migrate();
-        assertEquals("3", flyway.info().current().getVersion().getVersion());
+        assertEquals("4", flyway.info().current().getVersion().getVersion());
         List<String> tables = List.of(
                 "evaluation_dataset_draft_sample",
                 "evaluation_run_manifest",
@@ -49,6 +48,7 @@ class EvaluationSchemaV3IntegrationTest {
         assertTrue(columnExists("evaluation_dataset_draft_sample", "dataset_id"));
         assertTrue(columnExists("evaluation_gate_proof", "canonical_payload"));
         assertRejectsCrossTenantDatasetReference();
+        assertRejectsCrossTenantDatasetVersionReference();
     }
 
     @AfterEach
@@ -80,6 +80,18 @@ class EvaluationSchemaV3IntegrationTest {
                     + ".evaluation_dataset_draft_sample (tenant_id, draft_id, sample_id, dataset_id, sample_payload, sample_order) "
                     + "VALUES ('tenant-b', '" + UUID.randomUUID() + "', '" + UUID.randomUUID() + "', '" + datasetId
                     + "', '{}'::jsonb, 1)"));
+        }
+    }
+
+    private void assertRejectsCrossTenantDatasetVersionReference() throws SQLException {
+        UUID datasetId = UUID.randomUUID();
+        try (Connection connection = openConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset "
+                    + "(id, tenant_id, name, state) VALUES ('" + datasetId + "', 'tenant-a-v2', 'dataset-v2', 'DRAFT')");
+            assertThrows(SQLException.class, () -> statement.execute("INSERT INTO " + schema
+                    + ".evaluation_dataset_version (id, tenant_id, dataset_id, version_number, content_digest, visibility) "
+                    + "VALUES ('" + UUID.randomUUID() + "', 'tenant-b-v2', '" + datasetId
+                    + "', 1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'PRIVATE')"));
         }
     }
 
