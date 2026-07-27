@@ -14,9 +14,11 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import com.bn.aliagent.evaluation.runner.EvaluationRunRepository;
 
 @Configuration
 class EvaluationIntegrationConfiguration {
+    @Bean @Profile("database") EvaluationRunRepository jdbcEvaluationRunRepository(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcEvaluationRunRepository(jdbc); }
     @Bean @Profile("!database") EventInbox evaluationEventInbox() { return new EventInbox.InMemory(); }
     @Bean @Profile("database") EventInbox jdbcEvaluationEventInbox(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcEventInbox(jdbc); }
     @Bean @Profile("!database") CandidateSink evaluationCandidateSink() { return candidate -> { }; }
