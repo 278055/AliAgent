@@ -90,6 +90,38 @@ class EvaluationSchemaV3IntegrationTest {
         assertForeignKey("evaluation_gate_proof", "tenant_id", "decision_id", "evaluation_gate_decision");
     }
 
+    @Test
+    void backfillsUniqueV8SnapshotCandidateBeforeAddingTenantForeignKey() throws SQLException {
+        migrateTo("8");
+        UUID dataset = UUID.randomUUID(), candidate = UUID.randomUUID(), version = UUID.randomUUID(), snapshot = UUID.randomUUID();
+        try (Connection connection = openConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO " + schema + ".evaluation_candidate (id,tenant_id,source_event_id,body_digest,status,anonymization_rule_version,expires_at) VALUES ('" + candidate + "','tenant-v9','" + UUID.randomUUID() + "','" + "a".repeat(64) + "','ACCEPTED','v1',CURRENT_TIMESTAMP)");
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset (id,tenant_id,name,state) VALUES ('" + dataset + "','tenant-v9','v9','PUBLISHED')");
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset_version (id,tenant_id,dataset_id,version_number,content_digest,visibility) VALUES ('" + version + "','tenant-v9','" + dataset + "',1,'" + "b".repeat(64) + "','PRIVATE')");
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset_draft_sample (tenant_id,draft_id,sample_id,dataset_id,sample_payload,sample_order) VALUES ('tenant-v9','" + dataset + "','" + candidate + "','" + dataset + "','{}',0)");
+            statement.execute("INSERT INTO " + schema + ".evaluation_sample_snapshot (id,tenant_id,dataset_version_id,sample_json) VALUES ('" + snapshot + "','tenant-v9','" + version + "','{}')");
+        }
+        migrateLatest();
+        try (Connection connection = openConnection(); Statement statement = connection.createStatement(); var result = statement.executeQuery("SELECT candidate_id FROM " + schema + ".evaluation_sample_snapshot WHERE id='" + snapshot + "'")) { assertTrue(result.next()); assertEquals(candidate, result.getObject(1, UUID.class)); }
+    }
+
+    @Test
+    void rejectsAmbiguousV8SnapshotCandidateBackfill() throws SQLException {
+        migrateTo("8");
+        UUID dataset = UUID.randomUUID(), version = UUID.randomUUID(), snapshot = UUID.randomUUID();
+        try (Connection connection = openConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset (id,tenant_id,name,state) VALUES ('" + dataset + "','tenant-amb','amb','PUBLISHED')");
+            statement.execute("INSERT INTO " + schema + ".evaluation_dataset_version (id,tenant_id,dataset_id,version_number,content_digest,visibility) VALUES ('" + version + "','tenant-amb','" + dataset + "',1,'" + "c".repeat(64) + "','PRIVATE')");
+            for (int i = 0; i < 2; i++) { UUID candidate = UUID.randomUUID(); statement.execute("INSERT INTO " + schema + ".evaluation_candidate (id,tenant_id,source_event_id,body_digest,status,anonymization_rule_version,expires_at) VALUES ('" + candidate + "','tenant-amb','" + UUID.randomUUID() + "','" + "d".repeat(64) + "','ACCEPTED','v1',CURRENT_TIMESTAMP)"); statement.execute("INSERT INTO " + schema + ".evaluation_dataset_draft_sample (tenant_id,draft_id,sample_id,dataset_id,sample_payload,sample_order) VALUES ('tenant-amb','" + dataset + "','" + candidate + "','" + dataset + "','{}'," + i + ")"); }
+            statement.execute("INSERT INTO " + schema + ".evaluation_sample_snapshot (id,tenant_id,dataset_version_id,sample_json) VALUES ('" + snapshot + "','tenant-amb','" + version + "','{}')");
+        }
+        var exception = assertThrows(RuntimeException.class, this::migrateLatest);
+        assertTrue(exception.getMessage().contains("cannot uniquely backfill"));
+    }
+
+    private void migrateTo(String target) { Flyway.configure().dataSource(databaseUrl(), databaseUser(), databasePassword()).schemas(schema).defaultSchema(schema).createSchemas(true).locations("filesystem:src/main/resources/db/migration").target(target).load().migrate(); }
+    private void migrateLatest() { Flyway.configure().dataSource(databaseUrl(), databaseUser(), databasePassword()).schemas(schema).defaultSchema(schema).createSchemas(true).locations("filesystem:src/main/resources/db/migration").load().migrate(); }
+
     @AfterEach
     void dropSchema() throws SQLException {
         try (Connection connection = openConnection(); Statement statement = connection.createStatement()) {
