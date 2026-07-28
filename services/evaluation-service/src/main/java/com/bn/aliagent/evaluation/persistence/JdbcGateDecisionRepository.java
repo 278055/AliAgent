@@ -20,8 +20,8 @@ public final class JdbcGateDecisionRepository {
     public void storeProof(String tenantId, GateDecision decision, GateDecision.GateProof proof) {
         jdbc.update("INSERT INTO evaluation_gate_proof (tenant_id, proof_id, decision_id, canonical_payload, canonical_payload_text, signature, key_id, issued_at, expires_at) VALUES (?, ?, ?, to_jsonb(CAST(? AS text)), ?, ?, ?, ?, ?)", tenantId, proof.proofId(), decision.decisionId(), proof.canonicalPayload(), proof.canonicalPayload(), proof.signature(), proof.keyId(), Timestamp.from(decision.issuedAt()), Timestamp.from(decision.expiresAt()));
     }
-    public GateDecisionVerifier.RevocationPort revocations(String tenantId) {
-        return proofId -> Boolean.TRUE.equals(jdbc.query("SELECT EXISTS (SELECT 1 FROM evaluation_gate_proof WHERE tenant_id = ? AND proof_id = ? AND revoked_at IS NOT NULL)", rs -> rs.next() && rs.getBoolean(1), tenantId, proofId));
+    public GateDecisionVerifier.RevocationPort revocations() {
+        return (tenantId, proofId) -> Boolean.TRUE.equals(jdbc.query("SELECT EXISTS (SELECT 1 FROM evaluation_gate_proof WHERE tenant_id = ? AND proof_id = ? AND revoked_at IS NOT NULL)", rs -> rs.next() && rs.getBoolean(1), tenantId, proofId));
     }
     public Optional<GateDecision.GateProof> findProof(String tenantId, UUID proofId) {
         return jdbc.query("SELECT canonical_payload_text, signature, key_id FROM evaluation_gate_proof WHERE tenant_id = ? AND proof_id = ?", rs ->
@@ -30,7 +30,7 @@ public final class JdbcGateDecisionRepository {
     public boolean verify(String tenantId, GateDecision.GateProof proof, GateDecision.GateTarget target, String policyVersion, GateDecisionVerifier verifier) {
         return findProof(tenantId, proof.proofId()).filter(stored -> stored.canonicalPayload().equals(proof.canonicalPayload())
                 && stored.signature().equals(proof.signature()) && stored.keyId().equals(proof.keyId()))
-                .filter(stored -> !revocations(tenantId).isRevoked(stored.proofId()))
+                .filter(stored -> !revocations().isRevoked(tenantId, stored.proofId()))
                 .filter(stored -> verifier.verify(stored, target, policyVersion).accepted()).isPresent();
     }
     public void revoke(String tenantId, UUID proofId, String reason) {

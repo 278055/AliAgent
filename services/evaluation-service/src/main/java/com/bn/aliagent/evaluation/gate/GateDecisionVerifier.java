@@ -19,7 +19,7 @@ public final class GateDecisionVerifier {
     public Verification verify(GateDecision.GateProof proof, GateDecision.GateTarget target, String policyVersion) {
         try {
             VerificationKey key = keys.get(proof.keyId());
-            if (key == null || revocations.isRevoked(proof.proofId()) || !signatureMatches(proof, key)) return Verification.reject();
+            if (key == null || revocations.isRevoked(target.tenantId(), proof.proofId()) || !signatureMatches(proof, key)) return Verification.reject();
             Map<String, String> payload = proof.canonicalPayload().lines().map(line -> line.split("=", 2)).filter(parts -> parts.length == 2)
                     .collect(java.util.stream.Collectors.toMap(parts -> parts[0], parts -> parts[1], (left, right) -> left));
             return "PASS".equals(payload.get("gateStatus")) && Instant.parse(payload.get("expiresAt")).isAfter(clock.instant()) && targetMatches(payload, target) && policyVersion.equals(payload.get("gatePolicyVersion"))
@@ -35,7 +35,7 @@ public final class GateDecisionVerifier {
         return target.tenantId().equals(value.get("tenantId")) && target.artifactType().equals(value.get("artifactType"))
                 && target.artifactVersionId().toString().equals(value.get("artifactVersionId")) && target.manifestDigest().equals(value.get("manifestDigest"));
     }
-    public interface RevocationPort { boolean isRevoked(java.util.UUID proofId); }
+    public interface RevocationPort { boolean isRevoked(String tenantId, java.util.UUID proofId); }
     public record VerificationKey(PublicKey publicKey, String algorithm) { }
     public record Verification(boolean accepted) { static Verification accept() { return new Verification(true); } static Verification reject() { return new Verification(false); } }
 }

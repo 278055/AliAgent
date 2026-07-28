@@ -58,6 +58,7 @@ class DatabaseEvaluationWiringIntegrationTest {
 
         assertTrue(decisions.verify(tenant, issued.proof(), target, "policy", verifier));
         decisions.revoke(tenant, issued.proof().proofId(), "test");
+        assertFalse(verifier.verify(issued.proof(), target, "policy").accepted());
         assertFalse(decisions.verify(tenant, issued.proof(), target, "policy", verifier));
     }
 

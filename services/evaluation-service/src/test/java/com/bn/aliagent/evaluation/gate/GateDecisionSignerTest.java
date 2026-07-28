@@ -26,7 +26,7 @@ class GateDecisionSignerTest {
         pair = KeyPairGenerator.getInstance("EC").generateKeyPair();
         signer = new GateDecisionSigner(keyId -> new GateDecisionSigner.SigningKey(keyId, pair.getPrivate(), "SHA256withECDSA"));
         verifier = new GateDecisionVerifier(Map.of("key-1", new GateDecisionVerifier.VerificationKey(pair.getPublic(), "SHA256withECDSA")),
-                proofId -> false, Clock.fixed(NOW, ZoneOffset.UTC));
+                (tenantId, proofId) -> false, Clock.fixed(NOW, ZoneOffset.UTC));
         decision = new GateDecision(UUID.randomUUID(), new GateDecision.GateTarget("tenant-a", "PROMPT", UUID.randomUUID(), "manifest-sha"),
                 "baseline-sha", "dataset-v1", "scoring-v1", "policy-v1", UUID.randomUUID(), "result-sha", GateEvaluationService.GateStatus.PASS, NOW, NOW.plusSeconds(600));
     }
@@ -61,7 +61,7 @@ class GateDecisionSignerTest {
                 decision.gateStatus(), NOW.minusSeconds(1_200), NOW.minusSeconds(1));
         GateDecision.GateProof expiredProof = signer.sign(expired, "key-1");
         GateDecisionVerifier revoked = new GateDecisionVerifier(Map.of("key-1", new GateDecisionVerifier.VerificationKey(
-                pair.getPublic(), "SHA256withECDSA")), proofId -> true, Clock.fixed(NOW, ZoneOffset.UTC));
+                pair.getPublic(), "SHA256withECDSA")), (tenantId, proofId) -> true, Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertFalse(verifier.verify(expiredProof, expired.target(), "policy-v1").accepted());
         assertFalse(verifier.verify(proof, new GateDecision.GateTarget("tenant-b", "PROMPT", decision.target().artifactVersionId(), "manifest-sha"), "policy-v1").accepted());
@@ -88,7 +88,7 @@ class GateDecisionSignerTest {
         KeyPair rsa = KeyPairGenerator.getInstance("RSA").generateKeyPair();
         GateDecisionSigner rsaSigner = new GateDecisionSigner(keyId -> new GateDecisionSigner.SigningKey("other-key", rsa.getPrivate(), "SHA256withRSA"));
         GateDecisionVerifier rsaVerifier = new GateDecisionVerifier(Map.of("rsa-key", new GateDecisionVerifier.VerificationKey(rsa.getPublic(), "SHA256withRSA")),
-                proofId -> false, Clock.fixed(NOW, ZoneOffset.UTC));
+                (tenantId, proofId) -> false, Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertThrows(IllegalArgumentException.class, () -> rsaSigner.sign(decision, "rsa-key"));
 

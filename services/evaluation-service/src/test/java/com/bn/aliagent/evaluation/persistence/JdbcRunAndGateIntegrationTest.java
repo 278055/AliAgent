@@ -16,6 +16,8 @@ import com.bn.aliagent.evaluation.replay.EvaluationManifest;
 import com.bn.aliagent.evaluation.replay.ReplayFixture;
 import com.bn.aliagent.evaluation.runner.EvaluationRunService;
 import com.bn.aliagent.evaluation.runner.MockReplayRunner;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -25,6 +27,10 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,6 +68,12 @@ class JdbcRunAndGateIntegrationTest {
             assertThrows(Exception.class, () -> jdbc.update("UPDATE evaluation_run_manifest SET model_name = 'changed' WHERE tenant_id = ? AND run_id = ?", TENANT, runId));
             assertThrows(Exception.class, () -> jdbc.update("UPDATE evaluation_run SET manifest_digest = ? WHERE tenant_id = ? AND id = ?", "b".repeat(64), TENANT, runId));
             assertThrows(IllegalStateException.class, () -> runs.storeResult(TENANT, runId, fixture(), new MockReplayRunner().replay(TENANT, manifest, fixture())));
+            UUID resultId = jdbc.queryForObject("SELECT id FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", UUID.class, TENANT, runId);
+            UUID evidenceId = jdbc.queryForObject("SELECT evidence_id FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", UUID.class, TENANT, runId);
+            assertThrows(Exception.class, () -> jdbc.update("UPDATE evaluation_result SET evidence_json = '{}'::jsonb WHERE tenant_id = ? AND id = ?", TENANT, resultId));
+            assertThrows(Exception.class, () -> jdbc.update("DELETE FROM evaluation_result WHERE tenant_id = ? AND id = ?", TENANT, resultId));
+            assertThrows(Exception.class, () -> jdbc.update("UPDATE evaluation_metric_evidence SET metric_value = 2 WHERE tenant_id = ? AND evidence_id = ?", TENANT, evidenceId));
+            assertThrows(Exception.class, () -> jdbc.update("DELETE FROM evaluation_metric_evidence WHERE tenant_id = ? AND evidence_id = ?", TENANT, evidenceId));
 
             KeyPair pair = KeyPairGenerator.getInstance("EC").generateKeyPair();
             GateDecisionSigner signer = new GateDecisionSigner(keyId -> new GateDecisionSigner.SigningKey(keyId, pair.getPrivate(), "SHA256withECDSA"));
@@ -73,7 +85,7 @@ class JdbcRunAndGateIntegrationTest {
 
             GateController.IssuedDecision issued = controller.issue(TENANT, target, new GatePolicy("gate-v1", Map.of("intent", 0.1), true), results, "key-1", 600);
             GateDecisionVerifier verifier = new GateDecisionVerifier(Map.of("key-1", new GateDecisionVerifier.VerificationKey(pair.getPublic(), "SHA256withECDSA")),
-                    decisions.revocations(TENANT), Clock.fixed(NOW, ZoneOffset.UTC));
+                    decisions.revocations(), Clock.fixed(NOW, ZoneOffset.UTC));
 
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_gate_proof WHERE tenant_id = ? AND proof_id = ?", Integer.class, TENANT, issued.proof().proofId()));
             GateDecision.GateProof storedProof = decisions.findProof(TENANT, issued.proof().proofId()).orElseThrow();
@@ -95,6 +107,49 @@ class JdbcRunAndGateIntegrationTest {
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_gate_decision WHERE tenant_id = ? AND status = 'FAIL'", Integer.class, TENANT));
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_gate_proof proof JOIN evaluation_gate_decision decision ON proof.decision_id = decision.id AND proof.tenant_id = decision.tenant_id WHERE proof.tenant_id = ? AND decision.status = 'FAIL'", Integer.class, TENANT));
         } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
+
+    @Test
+    void completionWaitsForInFlightResultWriteAndThenCompletes() throws Exception {
+        String schema = "test_p8_result_lock_" + UUID.randomUUID().toString().replace("-", "");
+        String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;
+        JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "postgres", "123456"));
+        jdbc.execute("CREATE SCHEMA " + schema);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Flyway.configure().dataSource(url, "postgres", "123456").schemas(schema)
+                    .locations("filesystem:" + Path.of("src/main/resources/db/migration").toAbsolutePath()).load().migrate();
+            UUID datasetId = UUID.randomUUID();
+            UUID datasetVersionId = UUID.randomUUID();
+            UUID runId = UUID.randomUUID();
+            jdbc.update("INSERT INTO evaluation_dataset (id, tenant_id, name, state) VALUES (?, ?, 'test-p8-result-lock', 'PUBLISHED')", datasetId, TENANT);
+            jdbc.update("INSERT INTO evaluation_dataset_version (id, tenant_id, dataset_id, version_number, content_digest, visibility) VALUES (?, ?, ?, 1, ?, 'PUBLISHED')",
+                    datasetVersionId, TENANT, datasetId, "a".repeat(64));
+            jdbc.update("INSERT INTO evaluation_run (id, tenant_id, dataset_version_id, manifest_digest, mode, status) VALUES (?, ?, ?, ?, 'MOCK', 'RUNNING')",
+                    runId, TENANT, datasetVersionId, "b".repeat(64));
+
+            try (Connection writer = java.sql.DriverManager.getConnection(url, "postgres", "123456")) {
+                writer.setAutoCommit(false);
+                try (PreparedStatement insert = writer.prepareStatement("INSERT INTO evaluation_result (id, tenant_id, run_id, sample_id, evidence_json) VALUES (?, ?, ?, ?, '{}'::jsonb)")) {
+                    insert.setObject(1, UUID.randomUUID());
+                    insert.setString(2, TENANT);
+                    insert.setObject(3, runId);
+                    insert.setObject(4, UUID.randomUUID());
+                    insert.executeUpdate();
+                }
+
+                JdbcEvaluationRunRepository runs = new JdbcEvaluationRunRepository(jdbc);
+                Future<?> completion = executor.submit(() -> runs.complete(TENANT, runId));
+                Thread.sleep(200);
+                assertFalse(completion.isDone());
+                writer.commit();
+                completion.get(5, TimeUnit.SECONDS);
+            }
+            assertEquals("COMPLETED", jdbc.queryForObject("SELECT status FROM evaluation_run WHERE tenant_id = ? AND id = ?", String.class, TENANT, runId));
+        } finally {
+            executor.shutdownNow();
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
         }
     }

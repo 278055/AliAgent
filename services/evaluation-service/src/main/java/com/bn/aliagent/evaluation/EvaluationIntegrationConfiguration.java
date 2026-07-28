@@ -39,7 +39,7 @@ class EvaluationIntegrationConfiguration {
         catch (Exception exception) { throw new IllegalStateException("无法初始化 Gate 签名密钥", exception); }
     }
     @Bean @Profile("database") GateDecisionSigner gateDecisionSigner(GateKeys keys) { return new GateDecisionSigner(keyId -> new GateDecisionSigner.SigningKey(keyId, keys.pair().getPrivate(), "SHA256withECDSA")); }
-    @Bean @Profile("database") GateDecisionVerifier gateDecisionVerifier(GateKeys keys) { return new GateDecisionVerifier(Map.of("database", new GateDecisionVerifier.VerificationKey(keys.pair().getPublic(), "SHA256withECDSA")), proofId -> false, Clock.systemUTC()); }
+    @Bean @Profile("database") GateDecisionVerifier gateDecisionVerifier(GateKeys keys, com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository decisions) { return new GateDecisionVerifier(Map.of("database", new GateDecisionVerifier.VerificationKey(keys.pair().getPublic(), "SHA256withECDSA")), decisions.revocations(), Clock.systemUTC()); }
     @Bean @Profile("database") GateController jdbcGateController(GateDecisionSigner signer, com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository decisions) { return new GateController(new GateEvaluationService(), signer, Clock.systemUTC(), decisions); }
     @Bean @Profile("!database") GateDecisionSigner inMemoryGateDecisionSigner() {
         try { var pair = KeyPairGenerator.getInstance("EC").generateKeyPair(); return new GateDecisionSigner(keyId -> new GateDecisionSigner.SigningKey(keyId, pair.getPrivate(), "SHA256withECDSA")); }
