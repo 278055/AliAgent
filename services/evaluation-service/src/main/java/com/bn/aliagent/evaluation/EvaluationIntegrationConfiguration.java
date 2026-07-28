@@ -30,7 +30,7 @@ import java.util.Map;
 class EvaluationIntegrationConfiguration {
     @Bean @Profile("database") EvaluationRunRepository jdbcEvaluationRunRepository(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcEvaluationRunRepository(jdbc); }
     @Bean @Profile("database") com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository jdbcGateDecisionRepository(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository(jdbc); }
-    @Bean @Profile("database") DatasetSnapshotPort jdbcDatasetSnapshotPort() { return (tenantId, versionId) -> java.util.List.of(); }
+    @Bean @Profile("database") DatasetSnapshotPort jdbcDatasetSnapshotPort(JdbcTemplate jdbc) { return new com.bn.aliagent.evaluation.persistence.JdbcDatasetSnapshotPort(jdbc); }
     @Bean @Profile("database") EvaluationRunService jdbcEvaluationRunService(DatasetSnapshotPort datasets, EvaluationRunRepository runs) { return new EvaluationRunService(datasets, new MockReplayRunner(), runs); }
     @Bean @Profile("!database") DatasetSnapshotPort inMemoryDatasetSnapshotPort() { return (tenantId, versionId) -> java.util.List.of(); }
     @Bean @Profile("!database") EvaluationRunService inMemoryEvaluationRunService(DatasetSnapshotPort datasets) { return new EvaluationRunService(datasets, new MockReplayRunner()); }

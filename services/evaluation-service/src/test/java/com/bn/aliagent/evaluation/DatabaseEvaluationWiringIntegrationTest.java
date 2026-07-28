@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.bn.aliagent.evaluation.gate.GateController;
 import com.bn.aliagent.evaluation.gate.GateDecisionSigner;
@@ -11,6 +12,11 @@ import com.bn.aliagent.evaluation.gate.GateDecisionVerifier;
 import com.bn.aliagent.evaluation.gate.GateDecision;
 import com.bn.aliagent.evaluation.gate.GatePolicy;
 import com.bn.aliagent.evaluation.gate.GateResultPort;
+import com.bn.aliagent.evaluation.candidate.CandidateReviewCommand;
+import com.bn.aliagent.evaluation.candidate.CandidateReviewService;
+import com.bn.aliagent.evaluation.candidate.ReviewAction;
+import com.bn.aliagent.evaluation.dataset.EvaluationDatasetService;
+import com.bn.aliagent.evaluation.replay.EvaluationManifest;
 import com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository;
 import com.bn.aliagent.evaluation.runner.EvaluationRunService;
 import java.sql.DriverManager;
@@ -42,6 +48,8 @@ class DatabaseEvaluationWiringIntegrationTest {
     @Autowired private GateDecisionSigner signer;
     @Autowired private GateDecisionVerifier verifier;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private CandidateReviewService candidates;
+    @Autowired private EvaluationDatasetService datasets;
 
     @Test
     void databaseProfileWiresDurableRunAndGateServices() {
@@ -79,6 +87,27 @@ class DatabaseEvaluationWiringIntegrationTest {
 
         assertTrue(verifier.verify(proofA.proof(), targetA, "policy").accepted());
         assertFalse(verifier.verify(new GateDecision.GateProof(proofA.proof().proofId(), proofB.proof().canonicalPayload(), proofB.proof().signature(), proofB.proof().keyId()), targetB, "policy").accepted());
+    }
+
+    @Test
+    void databaseProfileRunsPublishedSnapshotAndPersistsResultAndEvidence() {
+        String tenant = "test-p8-durable";
+        UUID candidateId = UUID.randomUUID();
+        jdbc.update("INSERT INTO evaluation_candidate (id, tenant_id, source_event_id, anonymized_body, body_digest, status, anonymization_rule_version, expires_at) VALUES (?, ?, ?, ?::jsonb, ?, 'PENDING_REVIEW', 'test', now() + interval '1 day')",
+                candidateId, tenant, UUID.randomUUID(), "{\"input\":\"test-p8 durable sample\"}", "digest");
+        candidates.review(new CandidateReviewCommand(candidateId, tenant, "test-reviewer", ReviewAction.ACCEPT,
+                Map.of("intent", "ORDER_STATUS"), java.util.Set.of("test"), "accepted"));
+        var draft = datasets.createDraft(tenant, "test-p8-durable-draft");
+        datasets.addCandidate(tenant, draft.id(), candidateId);
+        var published = datasets.publish(tenant, draft.id(), false, null);
+        EvaluationManifest manifest = new EvaluationManifest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "tool-v1", "rule-v1", published.id(), "score-v1", "judge-v1");
+
+        UUID runId = runs.startMock(tenant, manifest);
+
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
+        assertEquals("COMPLETED", jdbc.queryForObject("SELECT status FROM evaluation_run WHERE tenant_id = ? AND id = ?", String.class, tenant, runId));
     }
 
     private static GateResultPort.GateEvaluationResults results(String tenant, String manifest) {
