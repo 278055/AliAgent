@@ -71,14 +71,23 @@ class TrustedIdentityGatewayFilterTest {
     }
 
     @Test
-    void evaluationRouteIsIssuedForTheEvaluationService() {
+    void evaluationCandidateRouteUsesEvaluationAudienceAndRejectsMembers() {
         String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
         String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
-        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/evaluation/datasets/" + java.util.UUID.randomUUID() + "/publish")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF"))).build());
+        var memberExchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/evaluation/candidates")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "member-1", "MEMBER", List.of("MEMBER"))).build());
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString())
+                .filter(memberExchange, value -> reactor.core.publisher.Mono.empty()).block();
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, memberExchange.getResponse().getStatusCode());
+
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/evaluation/candidates")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF", "EVALUATION_ADMIN")))
+                .header("X-User-Roles", "MEMBER").build());
         AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
         new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString()).filter(exchange, value -> { forwarded.set(value.getRequest().getHeaders()); return reactor.core.publisher.Mono.empty(); }).block();
-        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7), "evaluation-service", "POST:" + exchange.getRequest().getPath().value());
+        assertEquals("STAFF,EVALUATION_ADMIN", forwarded.get().getFirst("X-User-Roles"));
+        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7), "evaluation-service", "GET:/api/v1/evaluation/candidates");
     }
 
     @Test

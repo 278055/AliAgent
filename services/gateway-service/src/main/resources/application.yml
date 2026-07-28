@@ -24,6 +24,12 @@ spring:
           uri: ${CONVERSATION_HTTP_URI:http://localhost:8081}
           predicates:
             - Path=/api/v1/**
+gateway:
+  evaluation:
+    roles:
+      candidate: EVALUATION_ADMIN
+      version: VERSION_ADMIN
+      dashscope: DASHSCOPE_APPROVER
 management:
   endpoints:
     web:
