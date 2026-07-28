@@ -102,6 +102,7 @@ class ContractValidatorTest {
         assertEquals("boolean", response.at("/properties/data/properties/accepted/type").asText());
         assertEquals("string", response.at("/properties/data/properties/reason/type").asText());
         assertTrue(operation.path("responses").has("400"));
+        assertTrue(operation.at("/responses/400/description").asText().contains("tenant"));
         assertTrue(operation.path("responses").has("401"));
     }
 }

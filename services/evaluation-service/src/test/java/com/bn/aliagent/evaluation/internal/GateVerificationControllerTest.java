@@ -46,6 +46,18 @@ class GateVerificationControllerTest {
     }
 
     @Test
+    void malformedRequestAndTenantMismatchAreRejectedAsBadRequest() throws Exception {
+        String token = new ServiceJwtSupport(SECRET).issue("gateway-service", "evaluation-service", List.of("POST:" + PATH));
+
+        mockMvc.perform(post(PATH).header("X-Service-Authorization", "Bearer " + token).header("X-Tenant-Id", "trusted-tenant")
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(PATH).header("X-Service-Authorization", "Bearer " + token).header("X-Tenant-Id", "trusted-tenant")
+                        .contentType("application/json").content("{\"tenantId\":\"untrusted-tenant\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void revokedPersistedProofIsRejected() throws Exception {
         String tenantId = "test-p8-gate-verification-" + UUID.randomUUID();
         UUID artifactVersionId = UUID.randomUUID();

@@ -65,5 +65,5 @@ paths:
                     properties:
                       accepted: { type: boolean }
                       reason: { type: string }
-        '400': { description: Malformed verification request }
+        '400': { description: Malformed verification request or tenant mismatch with the trusted identity header }
         '401': { description: Missing or invalid service JWT }

@@ -4,10 +4,12 @@ import com.bn.aliagent.evaluation.gate.GateDecisionVerifier;
 import com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 public final class GateVerificationController {
@@ -24,7 +26,7 @@ public final class GateVerificationController {
     public GateVerificationResponse verify(@RequestHeader("X-Tenant-Id") String trustedTenantId,
             @RequestBody GateVerificationRequest request) {
         if (request == null || !trustedTenantId.equals(request.tenantId()) || !complete(request)) {
-            return GateVerificationResponse.rejected("invalid gate verification request");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid gate verification request");
         }
         JdbcGateDecisionRepository repository = decisions.getIfAvailable();
         GateDecisionVerifier gateVerifier = verifier.getIfAvailable();
