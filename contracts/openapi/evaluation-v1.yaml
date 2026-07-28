@@ -16,6 +16,17 @@ paths:
   /internal/api/v1/evaluation/gate-proofs:verify:
     post:
       summary: Verify a persisted gate proof for an internal caller
+      parameters:
+        - name: X-Service-Authorization
+          in: header
+          required: true
+          schema: { type: string }
+          description: Bearer service JWT scoped to this operation.
+        - name: X-Tenant-Id
+          in: header
+          required: true
+          schema: { type: string }
+          description: Trusted tenant identity injected by the gateway.
       requestBody:
         required: true
         content:
@@ -38,5 +49,21 @@ paths:
                     signature: { type: string }
                     keyId: { type: string }
       responses:
-        '200': { description: Verification result }
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, message, data]
+                properties:
+                  code: { type: integer, example: 200 }
+                  message: { type: string, example: '' }
+                  data:
+                    type: object
+                    required: [accepted, reason]
+                    properties:
+                      accepted: { type: boolean }
+                      reason: { type: string }
+        '400': { description: Malformed verification request }
         '401': { description: Missing or invalid service JWT }
