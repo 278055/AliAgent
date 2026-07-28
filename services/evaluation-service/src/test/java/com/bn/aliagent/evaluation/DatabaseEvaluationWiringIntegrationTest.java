@@ -18,11 +18,13 @@ import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(properties = {
         "spring.profiles.active=database",
@@ -39,6 +41,7 @@ class DatabaseEvaluationWiringIntegrationTest {
     @Autowired private JdbcGateDecisionRepository decisions;
     @Autowired private GateDecisionSigner signer;
     @Autowired private GateDecisionVerifier verifier;
+    @Autowired private JdbcTemplate jdbc;
 
     @Test
     void databaseProfileWiresDurableRunAndGateServices() {
@@ -60,6 +63,26 @@ class DatabaseEvaluationWiringIntegrationTest {
         decisions.revoke(tenant, issued.proof().proofId(), "test");
         assertFalse(verifier.verify(issued.proof(), target, "policy").accepted());
         assertFalse(decisions.verify(tenant, issued.proof(), target, "policy", verifier));
+    }
+
+    @Test
+    void revocationIsIsolatedWhenTenantsHaveProofsWithTheSameProofId() {
+        String tenantA = "test-p8-revocation-a";
+        String tenantB = "test-p8-revocation-b";
+        GateDecision.GateTarget targetA = new GateDecision.GateTarget(tenantA, "PROMPT", UUID.randomUUID(), "manifest-a");
+        GateDecision.GateTarget targetB = new GateDecision.GateTarget(tenantB, "PROMPT", UUID.randomUUID(), "manifest-b");
+        GateController.IssuedDecision proofA = gates.issue(tenantA, targetA, new GatePolicy("policy", Map.of(), true), results(tenantA, "manifest-a"), "database", 600);
+        GateController.IssuedDecision proofB = gates.issue(tenantB, targetB, new GatePolicy("policy", Map.of(), true), results(tenantB, "manifest-b"), "database", 600);
+
+        jdbc.update("UPDATE evaluation_gate_proof SET proof_id = ? WHERE tenant_id = ? AND proof_id = ?", proofA.proof().proofId(), tenantB, proofB.proof().proofId());
+        decisions.revoke(tenantB, proofA.proof().proofId(), "test");
+
+        assertTrue(verifier.verify(proofA.proof(), targetA, "policy").accepted());
+        assertFalse(verifier.verify(new GateDecision.GateProof(proofA.proof().proofId(), proofB.proof().canonicalPayload(), proofB.proof().signature(), proofB.proof().keyId()), targetB, "policy").accepted());
+    }
+
+    private static GateResultPort.GateEvaluationResults results(String tenant, String manifest) {
+        return new GateResultPort.GateEvaluationResults(tenant, UUID.randomUUID(), manifest, "baseline", "dataset", "score", true, List.of(), Map.of(), "result", Instant.now());
     }
 
     @AfterAll
