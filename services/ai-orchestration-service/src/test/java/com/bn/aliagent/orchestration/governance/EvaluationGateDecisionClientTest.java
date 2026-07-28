@@ -1,6 +1,5 @@
 package com.bn.aliagent.orchestration.governance;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -9,6 +8,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -39,12 +39,17 @@ class EvaluationGateDecisionClientTest {
 
     @Test void rejectsFalseDecision() throws Exception { try (Server server = server(e -> reply(e, 200, "{\"data\":{\"accepted\":false}}"))) { assertThrows(SecurityException.class, () -> call(client(server))); } }
     @Test void rejectsNonSuccessResponse() throws Exception { try (Server server = server(e -> reply(e, 503, "{}"))) { assertThrows(SecurityException.class, () -> call(client(server))); } }
-    @Test void rejectsMalformedResponse() throws Exception { try (Server server = server(e -> reply(e, 200, "{\"data\":{\"accepted\":\"true\"}}"))) { assertThrows(SecurityException.class, () -> call(client(server))); } }
+    @Test void rejectsInvalidJsonResponse() throws Exception { try (Server server = server(e -> reply(e, 200, "{"))) { assertThrows(SecurityException.class, () -> call(client(server))); } }
+    @Test void rejectsAcceptedMissing() throws Exception { try (Server server = server(e -> reply(e, 200, "{\"data\":{}}"))) { assertThrows(SecurityException.class, () -> call(client(server))); } }
+    @Test void rejectsAcceptedNull() throws Exception { try (Server server = server(e -> reply(e, 200, "{\"data\":{\"accepted\":null}}"))) { assertThrows(SecurityException.class, () -> call(client(server))); } }
+    @Test void rejectsAcceptedString() throws Exception { try (Server server = server(e -> reply(e, 200, "{\"data\":{\"accepted\":\"true\"}}"))) { assertThrows(SecurityException.class, () -> call(client(server))); } }
+    @Test void rejectsResponseTimeout() throws Exception { try (Server server = server(e -> { sleepBriefly(); reply(e, 200, "{\"data\":{\"accepted\":true}}"); })) { assertThrows(SecurityException.class, () -> call(new EvaluationGateDecisionClient("http://127.0.0.1:" + server.port(), SECRET, Duration.ofMillis(100)))); } }
     @Test void rejectsUnavailableServer() { assertThrows(SecurityException.class, () -> call(new EvaluationGateDecisionClient("http://127.0.0.1:1", SECRET))); }
 
     private static void call(EvaluationGateDecisionClient client) { client.requirePass("tenant-a", VersionType.PROMPT, UUID.randomUUID(), "manifest", "policy", proof()); }
     private static String proof() { return "{\"proofId\":\"" + UUID.randomUUID() + "\",\"canonicalPayload\":\"payload\",\"signature\":\"signature\",\"keyId\":\"key-1\"}"; }
     private static EvaluationGateDecisionClient client(Server server) { return new EvaluationGateDecisionClient("http://127.0.0.1:" + server.port(), SECRET); }
+    private static void sleepBriefly() { try { Thread.sleep(300); } catch (InterruptedException exception) { Thread.currentThread().interrupt(); } }
     private static Server server(Handler handler) throws Exception { return new Server(handler); }
     private static void reply(HttpExchange exchange, int status, String body) throws java.io.IOException { byte[] bytes = body.getBytes(StandardCharsets.UTF_8); exchange.sendResponseHeaders(status, bytes.length); exchange.getResponseBody().write(bytes); exchange.close(); }
     @FunctionalInterface private interface Handler { void handle(HttpExchange exchange) throws java.io.IOException; }

@@ -16,12 +16,18 @@ final class EvaluationKnowledgeGateClient implements KnowledgeGateDecisionPort {
     private static final String PATH = "/internal/api/v1/evaluation/gate-proofs:verify";
     private final String baseUrl;
     private final String serviceJwtSecret;
+    private final Duration requestTimeout;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build();
     private final ObjectMapper json = new ObjectMapper();
 
     EvaluationKnowledgeGateClient(String baseUrl, String serviceJwtSecret) {
+        this(baseUrl, serviceJwtSecret, Duration.ofSeconds(2));
+    }
+
+    EvaluationKnowledgeGateClient(String baseUrl, String serviceJwtSecret, Duration requestTimeout) {
         this.baseUrl = baseUrl;
         this.serviceJwtSecret = serviceJwtSecret;
+        this.requestTimeout = requestTimeout;
     }
 
     @Override
@@ -32,7 +38,7 @@ final class EvaluationKnowledgeGateClient implements KnowledgeGateDecisionPort {
                     .put("artifactVersionId", versionId.toString()).put("manifestDigest", manifestDigest).put("policyVersion", policyVersion)
                     .set("proof", parsedProof);
             String token = new ServiceJwtSupport(serviceJwtSecret).issue("knowledge-service", "evaluation-service", List.of("POST:" + PATH));
-            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + PATH)).timeout(Duration.ofSeconds(2))
+            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + PATH)).timeout(requestTimeout)
                     .header("Content-Type", "application/json").header("X-Tenant-Id", tenantId)
                     .header("X-Service-Authorization", "Bearer " + token)
                     .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(requestBody))).build();
