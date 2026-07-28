@@ -13,3 +13,30 @@ paths:
     get: { summary: Compare equivalent evaluation runs, responses: { '200': { description: OK } } }
   /api/v1/evaluation/gate-decisions:
     post: { summary: Evaluate and issue a PASS gate decision, responses: { '201': { description: Created } } }
+  /internal/api/v1/evaluation/gate-proofs:verify:
+    post:
+      summary: Verify a persisted gate proof for an internal caller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, artifactType, artifactVersionId, manifestDigest, policyVersion, proof]
+              properties:
+                tenantId: { type: string }
+                artifactType: { type: string }
+                artifactVersionId: { type: string, format: uuid }
+                manifestDigest: { type: string }
+                policyVersion: { type: string }
+                proof:
+                  type: object
+                  required: [proofId, canonicalPayload, signature, keyId]
+                  properties:
+                    proofId: { type: string, format: uuid }
+                    canonicalPayload: { type: string }
+                    signature: { type: string }
+                    keyId: { type: string }
+      responses:
+        '200': { description: Verification result }
+        '401': { description: Missing or invalid service JWT }
