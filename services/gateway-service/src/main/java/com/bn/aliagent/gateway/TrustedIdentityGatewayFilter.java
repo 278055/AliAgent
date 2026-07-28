@@ -110,11 +110,19 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
         if (!"STAFF".equals(identity.subjectType())) {
             throw new ForbiddenException();
         }
-        String requiredRole = path.contains("/dashscope") ? dashScopeApproverRole
-                : path.contains("/gate") || path.contains("/versions/") ? versionAdminRole : evaluationAdminRole;
+        String requiredRole = switch (evaluationRoot(path)) {
+            case "dashscope" -> dashScopeApproverRole;
+            case "gate", "versions" -> versionAdminRole;
+            default -> evaluationAdminRole;
+        };
         if (!identity.roles().contains(requiredRole)) {
             throw new ForbiddenException();
         }
+    }
+
+    private String evaluationRoot(String path) {
+        String[] segments = path.split("/", 6);
+        return segments.length > 4 ? segments[4] : "";
     }
 
     private boolean requiresKnowledgeSnapshot(String path) {
