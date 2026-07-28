@@ -26,6 +26,43 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 class JdbcDatasetWorkflowIntegrationTest {
     @Test
+    void replaysV8EmptySnapshotAfterV14MakesItImmutable() {
+        String schema = "test_p8_legacy_snapshot_" + UUID.randomUUID().toString().replace("-", "");
+        String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;
+        JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "postgres", "123456"));
+        jdbc.execute("CREATE SCHEMA " + schema);
+        try {
+            Flyway.configure().dataSource(url, "postgres", "123456").schemas(schema)
+                    .locations("filesystem:" + Path.of("src/main/resources/db/migration").toAbsolutePath()).target("8").load().migrate();
+            UUID dataset = UUID.randomUUID();
+            UUID version = UUID.randomUUID();
+            UUID snapshot = UUID.randomUUID();
+            UUID candidate = insertAcceptedCandidate(jdbc);
+            jdbc.update("INSERT INTO evaluation_dataset (id, tenant_id, name, state) VALUES (?, 'test-tenant', 'legacy', 'PUBLISHED')", dataset);
+            jdbc.update("INSERT INTO evaluation_dataset_version (id, tenant_id, dataset_id, version_number, content_digest, visibility) VALUES (?, 'test-tenant', ?, 1, ?, 'PRIVATE')", version, dataset, "a".repeat(64));
+            jdbc.update("INSERT INTO evaluation_sample_snapshot (id, tenant_id, dataset_version_id, sample_json, candidate_id) VALUES (?, 'test-tenant', ?, '{\"input\":\"legacy input\",\"expected\":{\"intent\":\"GENERAL\"}}'::jsonb, ?)", snapshot, version, candidate);
+
+            Flyway.configure().dataSource(url, "postgres", "123456").schemas(schema)
+                    .locations("filesystem:" + Path.of("src/main/resources/db/migration").toAbsolutePath()).load().migrate();
+
+            var fixture = new JdbcDatasetSnapshotPort(jdbc).published("test-tenant", version).get(0);
+            assertEquals("legacy input", fixture.input());
+            assertEquals("GENERAL", fixture.expectedIntent());
+            assertEquals(List.of(), fixture.allowedTools());
+            assertEquals(List.of(), fixture.prohibitedTools());
+            assertEquals(Map.of(), fixture.parameterConstraints());
+            assertEquals(List.of(), fixture.requiredCitations());
+            assertEquals(List.of(), fixture.factAssertions());
+            assertEquals(List.of(), fixture.safetyLabels());
+            assertEquals(Map.of(), fixture.weights());
+            assertEquals(List.of(), fixture.applicableMetrics());
+            assertThrows(RuntimeException.class, () -> jdbc.update("UPDATE evaluation_sample_snapshot SET snapshot_payload = '{}'::jsonb WHERE id = ?", snapshot));
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
+
+    @Test
     void rejectsDirectUpdateAndDeleteOfPublishedSnapshot() {
         String schema = "test_p8_snapshot_immutable_" + UUID.randomUUID().toString().replace("-", "");
         String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;

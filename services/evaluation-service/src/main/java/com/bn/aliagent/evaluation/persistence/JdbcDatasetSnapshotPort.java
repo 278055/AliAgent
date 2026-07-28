@@ -45,6 +45,9 @@ public final class JdbcDatasetSnapshotPort implements DatasetSnapshotPort {
     }
 
     private List<String> strings(JsonNode value) {
+        if (value.isMissingNode() || value.isNull()) {
+            return List.of();
+        }
         if (!value.isArray()) {
             throw invalid("数组", value);
         }
@@ -59,6 +62,9 @@ public final class JdbcDatasetSnapshotPort implements DatasetSnapshotPort {
     }
 
     private Map<String, Object> map(JsonNode value) {
+        if (value.isMissingNode() || value.isNull()) {
+            return Map.of();
+        }
         if (!value.isObject()) {
             throw invalid("对象", value);
         }
@@ -66,6 +72,9 @@ public final class JdbcDatasetSnapshotPort implements DatasetSnapshotPort {
     }
 
     private Map<String, Double> weights(JsonNode value) {
+        if (value.isMissingNode() || value.isNull()) {
+            return Map.of();
+        }
         if (!value.isObject()) {
             throw invalid("数值对象", value);
         }
