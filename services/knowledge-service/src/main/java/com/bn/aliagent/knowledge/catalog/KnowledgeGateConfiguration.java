@@ -2,12 +2,12 @@ package com.bn.aliagent.knowledge.catalog;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 class KnowledgeGateConfiguration {
-    @Bean KnowledgeGateDecisionPort knowledgeGateDecisionPort() {
-        return (tenantId, versionId, manifestDigest, policyVersion, proof) -> {
-            throw new SecurityException("缺少可验证的 PASS Gate Decision");
-        };
+    @Bean KnowledgeGateDecisionPort knowledgeGateDecisionPort(@Value("${knowledge.evaluation.base-url}") String baseUrl,
+            @Value("${SERVICE_JWT_SECRET:}") String serviceJwtSecret) {
+        return new EvaluationKnowledgeGateClient(baseUrl, serviceJwtSecret);
     }
 }

@@ -3,6 +3,7 @@ package com.bn.aliagent.orchestration.governance;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -10,6 +11,8 @@ public class VersionGovernanceService {
     private final VersionRepository repository;
     private final GateDecisionPort gates;
 
+    @Autowired
+    public VersionGovernanceService(GateDecisionPort gates) { this(new InMemoryVersionRepository(List.of()), gates); }
     public VersionGovernanceService() { this(new InMemoryVersionRepository(List.of()), rejectAll()); }
     VersionGovernanceService(VersionRepository repository) { this(repository, rejectAll()); }
     VersionGovernanceService(VersionRepository repository, GateDecisionPort gates) { this.repository = repository; this.gates = gates; }
