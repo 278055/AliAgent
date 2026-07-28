@@ -17,7 +17,9 @@ import com.bn.aliagent.evaluation.candidate.CandidateReviewService;
 import com.bn.aliagent.evaluation.candidate.ReviewAction;
 import com.bn.aliagent.evaluation.dataset.EvaluationDatasetService;
 import com.bn.aliagent.evaluation.replay.EvaluationManifest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.bn.aliagent.evaluation.persistence.JdbcGateDecisionRepository;
+import com.bn.aliagent.evaluation.persistence.JdbcDatasetSnapshotPort;
 import com.bn.aliagent.evaluation.runner.EvaluationRunService;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -25,22 +27,40 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(properties = {
         "spring.profiles.active=database",
-        "spring.datasource.url=jdbc:postgresql://localhost:5432/postgres?currentSchema=test_p8_wiring_context",
         "spring.datasource.username=postgres",
         "spring.datasource.password=123456",
         "spring.flyway.enabled=true",
         "SERVICE_JWT_SECRET=test-service-jwt-secret-must-be-at-least-32-bytes",
         "evaluation.anonymization.key=test-evaluation-anonymization-key-must-be-at-least-32-bytes"})
 class DatabaseEvaluationWiringIntegrationTest {
+    private static final String SCHEMA = "test_p8_wiring_" + UUID.randomUUID().toString().replace('-', '_');
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    static {
+        try (var connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/postgres", "postgres", "123456");
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA " + SCHEMA);
+        } catch (Exception exception) {
+            throw new ExceptionInInitializerError(exception);
+        }
+    }
+
+    @DynamicPropertySource
+    static void databaseProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + SCHEMA);
+    }
+
     @Autowired private ApplicationContext context;
     @Autowired private EvaluationRunService runs;
     @Autowired private GateController gates;
@@ -90,7 +110,7 @@ class DatabaseEvaluationWiringIntegrationTest {
     }
 
     @Test
-    void databaseProfileRunsPublishedSnapshotAndPersistsResultAndEvidence() {
+    void databaseProfileRunsPublishedSnapshotAndPersistsResultAndEvidence() throws Exception {
         String tenant = "test-p8-durable";
         UUID candidateId = UUID.randomUUID();
         jdbc.update("INSERT INTO evaluation_candidate (id, tenant_id, source_event_id, anonymized_body, body_digest, status, anonymization_rule_version, expires_at) VALUES (?, ?, ?, ?::jsonb, ?, 'PENDING_REVIEW', 'test', now() + interval '1 day')",
@@ -102,11 +122,27 @@ class DatabaseEvaluationWiringIntegrationTest {
         var published = datasets.publish(tenant, draft.id(), false, null);
         EvaluationManifest manifest = new EvaluationManifest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 "tool-v1", "rule-v1", published.id(), "score-v1", "judge-v1");
+        String requiredCitation = "mock://" + manifest.knowledgeVersionId();
+        jdbc.update("UPDATE evaluation_sample_snapshot SET snapshot_payload = ?::jsonb WHERE tenant_id = ? AND dataset_version_id = ?",
+                "{\"allowedTools\":[\"mall.order.read\"],\"citationRequirements\":[\"" + requiredCitation + "\"],\"expectedHumanHandoff\":true}", tenant, published.id());
+
+        var fixture = new JdbcDatasetSnapshotPort(jdbc).published(tenant, published.id()).get(0);
+        assertEquals(List.of("mall.order.read"), fixture.allowedTools());
+        assertEquals(List.of(requiredCitation), fixture.requiredCitations());
+        assertTrue(fixture.expectsHumanHandoff());
 
         UUID runId = runs.startMock(tenant, manifest);
 
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
+        String result = jdbc.queryForObject("SELECT evidence_json::text FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", String.class, tenant, runId);
+        String evidence = jdbc.queryForObject("SELECT evidence_payload::text FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", String.class, tenant, runId);
+        assertTrue(result.contains("mall.order.read"));
+        assertTrue(result.contains(requiredCitation));
+        assertTrue(JSON.readTree(result).path("humanHandoff").asBoolean());
+        assertTrue(evidence.contains("mall.order.read"));
+        assertTrue(evidence.contains(requiredCitation));
+        assertTrue(JSON.readTree(evidence).path("result").path("humanHandoff").asBoolean());
         assertEquals("COMPLETED", jdbc.queryForObject("SELECT status FROM evaluation_run WHERE tenant_id = ? AND id = ?", String.class, tenant, runId));
     }
 
@@ -117,8 +153,7 @@ class DatabaseEvaluationWiringIntegrationTest {
     @AfterAll
     static void dropSchema() throws Exception {
         try (var connection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/postgres", "postgres", "123456"); Statement statement = connection.createStatement()) {
-            statement.execute("DROP SCHEMA IF EXISTS test_p8_wiring_context CASCADE");
-            statement.execute("DROP SCHEMA IF EXISTS test_p8_wiring_placeholder CASCADE");
+            statement.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
         }
     }
 }
