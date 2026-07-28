@@ -1,0 +1,6 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object",
+  "required":["eventId","eventType","eventVersion","occurredAt","tenantId","traceId","producer","payload"],
+  "properties":{"eventId":{"type":"string","format":"uuid"},"eventType":{"enum":["conversation.completed","conversation.feedback.received","conversation.human.requested","ai.tool.failed","copilot.suggestion.actioned"]},"eventVersion":{"const":1},"tenantId":{"type":"string","minLength":1},"payload":{"type":"object"}}
+}

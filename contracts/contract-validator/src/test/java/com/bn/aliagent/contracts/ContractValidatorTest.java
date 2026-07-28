@@ -82,4 +82,27 @@ class ContractValidatorTest {
         assertTrue(v2Payload.path("required").toString().contains("replyMessageId"));
         assertTrue(v2Payload.path("required").toString().contains("generationId"));
     }
+
+    @Test
+    void internalGateVerificationContractRequiresTrustedHeadersAndDeclaresItsResponseShape() throws Exception {
+        JsonNode contract = new ObjectMapper(new YAMLFactory()).readTree(
+                Path.of("..", "openapi", "evaluation-v1.yaml").toFile());
+
+        JsonNode operation = contract.at("/paths/~1internal~1api~1v1~1evaluation~1gate-proofs:verify/post");
+        JsonNode parameters = operation.path("parameters");
+        JsonNode response = operation.at("/responses/200/content/application~1json/schema");
+
+        assertEquals(2, parameters.size());
+        assertEquals("X-Service-Authorization", parameters.get(0).path("name").asText());
+        assertTrue(parameters.get(0).path("required").asBoolean());
+        assertEquals("X-Tenant-Id", parameters.get(1).path("name").asText());
+        assertTrue(parameters.get(1).path("required").asBoolean());
+        assertEquals("object", response.path("type").asText());
+        assertTrue(response.path("required").toString().contains("code"));
+        assertEquals("boolean", response.at("/properties/data/properties/accepted/type").asText());
+        assertEquals("string", response.at("/properties/data/properties/reason/type").asText());
+        assertTrue(operation.path("responses").has("400"));
+        assertTrue(operation.at("/responses/400/description").asText().contains("tenant"));
+        assertTrue(operation.path("responses").has("401"));
+    }
 }

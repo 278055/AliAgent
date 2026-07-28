@@ -71,6 +71,72 @@ class TrustedIdentityGatewayFilterTest {
     }
 
     @Test
+    void evaluationCandidateRouteUsesEvaluationAudienceAndRejectsMembers() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        var memberExchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/evaluation/candidates")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "member-1", "MEMBER", List.of("MEMBER"))).build());
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString())
+                .filter(memberExchange, value -> reactor.core.publisher.Mono.empty()).block();
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, memberExchange.getResponse().getStatusCode());
+
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/evaluation/candidates")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF", "EVALUATION_ADMIN")))
+                .header("X-User-Roles", "MEMBER").build());
+        AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString()).filter(exchange, value -> { forwarded.set(value.getRequest().getHeaders()); return reactor.core.publisher.Mono.empty(); }).block();
+        assertEquals("STAFF,EVALUATION_ADMIN", forwarded.get().getFirst("X-User-Roles"));
+        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7), "evaluation-service", "GET:/api/v1/evaluation/candidates");
+    }
+
+    @Test
+    void evaluationRoutesUseExactRootSegmentRoleMapping() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/versions", "VERSION_ADMIN");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/versions/release-1", "VERSION_ADMIN");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/gate", "VERSION_ADMIN");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/gate/proofs", "VERSION_ADMIN");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/dashscope", "DASHSCOPE_APPROVER");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/dashscope/approvals", "DASHSCOPE_APPROVER");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/candidates", "EVALUATION_ADMIN");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/datasets", "EVALUATION_ADMIN");
+        assertEvaluationRole(identitySecret, serviceSecret, "/api/v1/evaluation/runs", "EVALUATION_ADMIN");
+    }
+
+    @Test
+    void evaluationRejectsStaffWithoutRoleAndUnauthenticatedRequests() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        assertEvaluationStatus(identitySecret, serviceSecret, "/api/v1/evaluation/candidates",
+                identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF")), org.springframework.http.HttpStatus.FORBIDDEN);
+        assertEvaluationStatus(identitySecret, serviceSecret, "/api/v1/evaluation/candidates", null, org.springframework.http.HttpStatus.UNAUTHORIZED);
+        assertEvaluationStatus(identitySecret, serviceSecret, "/api/v1/evaluation/candidates", "not-a-jwt", org.springframework.http.HttpStatus.UNAUTHORIZED);
+    }
+
+    private static void assertEvaluationRole(String identitySecret, String serviceSecret, String path, String role) {
+        AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "staff-1", "STAFF", List.of("STAFF", role))).build());
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> java.util.UUID.randomUUID().toString())
+                .filter(exchange, value -> { forwarded.set(value.getRequest().getHeaders()); return reactor.core.publisher.Mono.empty(); }).block();
+        assertNull(exchange.getResponse().getStatusCode());
+        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7), "evaluation-service", "GET:" + path);
+    }
+
+    private static void assertEvaluationStatus(String identitySecret, String serviceSecret, String path, String token,
+            org.springframework.http.HttpStatus expectedStatus) {
+        var request = MockServerHttpRequest.get(path).header("X-User-Roles", "EVALUATION_ADMIN")
+                .header("X-User-Permissions", "evaluation:manage");
+        if (token != null) request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        var exchange = MockServerWebExchange.from(request.build());
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, requestId) -> java.util.UUID.randomUUID().toString())
+                .filter(exchange, value -> reactor.core.publisher.Mono.empty()).block();
+        assertEquals(expectedStatus, exchange.getResponse().getStatusCode());
+    }
+
+    @Test
     void 普通会话请求不依赖知识快照服务() {
         String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
         String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";

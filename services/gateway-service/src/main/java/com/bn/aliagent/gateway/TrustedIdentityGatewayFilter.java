@@ -22,19 +22,34 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
     private final IdentityJwtSupport identityJwt;
     private final ServiceJwtSupport serviceJwt;
     private final AuthorizationSnapshotPort snapshots;
+    private final String evaluationAdminRole;
+    private final String versionAdminRole;
+    private final String dashScopeApproverRole;
 
     @Autowired
     TrustedIdentityGatewayFilter(
             @Value("${IDENTITY_JWT_SECRET:test-identity-jwt-secret-must-be-at-least-32-bytes}") String identitySecret,
             @Value("${SERVICE_JWT_SECRET:test-service-jwt-secret-must-be-at-least-32-bytes}") String serviceSecret,
-            @Value("${gateway.knowledge.base-url:http://localhost:8083}") String knowledgeBaseUrl) {
-        this(identitySecret, serviceSecret, new AuthorizationSnapshotIssuer(knowledgeBaseUrl, serviceSecret));
+            @Value("${gateway.knowledge.base-url:http://localhost:8083}") String knowledgeBaseUrl,
+            @Value("${gateway.evaluation.roles.candidate:EVALUATION_ADMIN}") String evaluationAdminRole,
+            @Value("${gateway.evaluation.roles.version:VERSION_ADMIN}") String versionAdminRole,
+            @Value("${gateway.evaluation.roles.dashscope:DASHSCOPE_APPROVER}") String dashScopeApproverRole) {
+        this(identitySecret, serviceSecret, new AuthorizationSnapshotIssuer(knowledgeBaseUrl, serviceSecret), evaluationAdminRole,
+                versionAdminRole, dashScopeApproverRole);
     }
 
     TrustedIdentityGatewayFilter(String identitySecret, String serviceSecret, AuthorizationSnapshotPort snapshots) {
+        this(identitySecret, serviceSecret, snapshots, "EVALUATION_ADMIN", "VERSION_ADMIN", "DASHSCOPE_APPROVER");
+    }
+
+    TrustedIdentityGatewayFilter(String identitySecret, String serviceSecret, AuthorizationSnapshotPort snapshots,
+            String evaluationAdminRole, String versionAdminRole, String dashScopeApproverRole) {
         this.identityJwt = new IdentityJwtSupport(identitySecret);
         this.serviceJwt = new ServiceJwtSupport(serviceSecret);
         this.snapshots = snapshots;
+        this.evaluationAdminRole = evaluationAdminRole;
+        this.versionAdminRole = versionAdminRole;
+        this.dashScopeApproverRole = dashScopeApproverRole;
     }
 
     @Override public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -47,7 +62,8 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
             String traceId = UUID.randomUUID().toString();
             String requestId = UUID.randomUUID().toString();
             String scope = exchange.getRequest().getMethod().name() + ":" + path;
-            String audience = path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service" : "conversation-service";
+            String audience = path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service"
+                    : path.startsWith("/api/v1/evaluation/") ? "evaluation-service" : "conversation-service";
             String snapshotId = requiresKnowledgeSnapshot(path) ? snapshots.issue(identity, traceId, requestId) : null;
             var request = exchange.getRequest().mutate().headers(headers -> {
                 INTERNAL_HEADERS.forEach(headers::remove);
@@ -76,6 +92,9 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
     @Override public int getOrder() { return Ordered.HIGHEST_PRECEDENCE; }
 
     private void requireP7Role(String path, TrustedIdentity identity) {
+        if (path.startsWith("/api/v1/evaluation/")) {
+            requireEvaluationRole(path, identity);
+        }
         if (path.startsWith("/api/v1/copilot/") && !"STAFF".equals(identity.subjectType())) {
             throw new ForbiddenException();
         }
@@ -85,6 +104,25 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/api/v1/agent/") && !"STAFF".equals(identity.subjectType())) {
             throw new ForbiddenException();
         }
+    }
+
+    private void requireEvaluationRole(String path, TrustedIdentity identity) {
+        if (!"STAFF".equals(identity.subjectType())) {
+            throw new ForbiddenException();
+        }
+        String requiredRole = switch (evaluationRoot(path)) {
+            case "dashscope" -> dashScopeApproverRole;
+            case "gate", "versions" -> versionAdminRole;
+            default -> evaluationAdminRole;
+        };
+        if (!identity.roles().contains(requiredRole)) {
+            throw new ForbiddenException();
+        }
+    }
+
+    private String evaluationRoot(String path) {
+        String[] segments = path.split("/", 6);
+        return segments.length > 4 ? segments[4] : "";
     }
 
     private boolean requiresKnowledgeSnapshot(String path) {

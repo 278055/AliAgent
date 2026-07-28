@@ -28,6 +28,7 @@ orchestration:
     provider: ${ORCHESTRATION_MODEL_PROVIDER:mock}
     dashscope-api-key: ${DASHSCOPE_API_KEY:}
   clients:
+    evaluation-base-url: ${ORCHESTRATION_EVALUATION_BASE_URL:http://localhost:8085}
     knowledge-base-url: ${ORCHESTRATION_KNOWLEDGE_BASE_URL:http://localhost:8083}
     mall-base-url: ${ORCHESTRATION_MALL_BASE_URL:http://localhost:8080}
     conversation-base-url: ${ORCHESTRATION_CONVERSATION_BASE_URL:http://localhost:8082}

@@ -15,6 +15,9 @@ management:
 nacos:
   discovery:
     server-addr: ${NACOS_SERVER_ADDR:}
+knowledge:
+  evaluation:
+    base-url: ${KNOWLEDGE_EVALUATION_BASE_URL:http://localhost:8085}
 logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} service=knowledge-service]"

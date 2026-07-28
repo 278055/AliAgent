@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -17,14 +18,14 @@ class VersionAdministrationControllerTest {
     @Autowired private MockMvc mockMvc;
 
     @Test
-    void internalPublishRequiresServiceJwtAndAcceptsScopedJwt() throws Exception {
+    void internalPublishRequiresServiceJwtAndGateDecision() throws Exception {
         mockMvc.perform(post("/internal/api/v1/orchestration/versions/publish").contentType("application/json")
-                .content("{\"type\":\"MODEL\",\"versionName\":\"v1\"}"))
+                .content("{\"tenantId\":\"test-p8\",\"type\":\"MODEL\",\"versionName\":\"v1\",\"manifestDigest\":\"m\",\"policyVersion\":\"p\",\"gateProof\":\"proof\"}"))
                 .andExpect(status().isUnauthorized());
         String token = new ServiceJwtSupport("test-service-jwt-secret-must-be-at-least-32-bytes")
                 .issue("gateway-service", "ai-orchestration-service", List.of("POST:/internal/api/v1/orchestration/versions/publish"));
-        mockMvc.perform(post("/internal/api/v1/orchestration/versions/publish").header("X-Service-Authorization", "Bearer " + token)
-                .contentType("application/json").content("{\"type\":\"MODEL\",\"versionName\":\"v1\"}"))
-                .andExpect(status().isAccepted());
+        assertThrows(Exception.class, () -> mockMvc.perform(post("/internal/api/v1/orchestration/versions/publish").header("X-Service-Authorization", "Bearer " + token)
+                .contentType("application/json").content("{\"tenantId\":\"test-p8\",\"type\":\"MODEL\",\"versionName\":\"v1\",\"manifestDigest\":\"m\",\"policyVersion\":\"p\",\"gateProof\":\"proof\"}"))
+                .andReturn());
     }
 }

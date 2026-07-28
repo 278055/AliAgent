@@ -1,0 +1,16 @@
+asyncapi: 2.6.0
+info:
+  title: AliAgent evaluation intake events
+  version: v1
+channels:
+  conversation.completed.v1: { subscribe: { message: { $ref: '#/components/messages/EvaluationEvent' } } }
+  conversation.feedback.received.v1: { subscribe: { message: { $ref: '#/components/messages/EvaluationEvent' } } }
+  conversation.human.requested.v1: { subscribe: { message: { $ref: '#/components/messages/EvaluationEvent' } } }
+  ai.tool.failed.v1: { subscribe: { message: { $ref: '#/components/messages/EvaluationEvent' } } }
+  copilot.suggestion.actioned.v1: { subscribe: { message: { $ref: '#/components/messages/EvaluationEvent' } } }
+components:
+  messages:
+    EvaluationEvent:
+      payload:
+        type: object
+        required: [eventId, eventType, eventVersion, occurredAt, tenantId, traceId, producer, payload]

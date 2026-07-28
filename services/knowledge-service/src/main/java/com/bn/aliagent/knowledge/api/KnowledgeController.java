@@ -72,9 +72,11 @@ public class KnowledgeController {
     }
 
     @PostMapping("/versions/{versionId}/publish")
-    public Map<String, Object> publish(HttpServletRequest request, @PathVariable("versionId") UUID versionId) {
+    public Map<String, Object> publish(HttpServletRequest request, @PathVariable("versionId") UUID versionId,
+            @RequestHeader("X-Gate-Manifest-Digest") String manifestDigest, @RequestHeader("X-Gate-Policy-Version") String policyVersion,
+            @RequestHeader("X-Gate-Proof") String proof) {
         String tenantId = TrustedKnowledgeRequestContext.require(request).tenantId();
-        catalog.publish(versionId, tenantId);
+        catalog.publish(versionId, tenantId, manifestDigest, policyVersion, proof);
         return Map.of("code", 200, "message", "", "data", Map.of("versionId", versionId, "state", "PUBLISHED"));
     }
 

@@ -1,0 +1,69 @@
+openapi: 3.0.3
+info:
+  title: AliAgent Evaluation API
+  version: v1
+paths:
+  /api/v1/evaluation/candidates:
+    get: { summary: List anonymized candidates, responses: { '200': { description: OK } } }
+  /api/v1/evaluation/datasets:
+    post: { summary: Create evaluation dataset draft, responses: { '202': { description: Accepted } } }
+  /api/v1/evaluation/runs:
+    post: { summary: Start an immutable evaluation run, responses: { '202': { description: Accepted } } }
+  /api/v1/evaluation/comparisons:
+    get: { summary: Compare equivalent evaluation runs, responses: { '200': { description: OK } } }
+  /api/v1/evaluation/gate-decisions:
+    post: { summary: Evaluate and issue a PASS gate decision, responses: { '201': { description: Created } } }
+  /internal/api/v1/evaluation/gate-proofs:verify:
+    post:
+      summary: Verify a persisted gate proof for an internal caller
+      parameters:
+        - name: X-Service-Authorization
+          in: header
+          required: true
+          schema: { type: string }
+          description: Bearer service JWT scoped to this operation.
+        - name: X-Tenant-Id
+          in: header
+          required: true
+          schema: { type: string }
+          description: Trusted tenant identity injected by the gateway.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, artifactType, artifactVersionId, manifestDigest, policyVersion, proof]
+              properties:
+                tenantId: { type: string }
+                artifactType: { type: string }
+                artifactVersionId: { type: string, format: uuid }
+                manifestDigest: { type: string }
+                policyVersion: { type: string }
+                proof:
+                  type: object
+                  required: [proofId, canonicalPayload, signature, keyId]
+                  properties:
+                    proofId: { type: string, format: uuid }
+                    canonicalPayload: { type: string }
+                    signature: { type: string }
+                    keyId: { type: string }
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, message, data]
+                properties:
+                  code: { type: integer, example: 200 }
+                  message: { type: string, example: '' }
+                  data:
+                    type: object
+                    required: [accepted, reason]
+                    properties:
+                      accepted: { type: boolean }
+                      reason: { type: string }
+        '400': { description: Malformed verification request or tenant mismatch with the trusted identity header }
+        '401': { description: Missing or invalid service JWT }
