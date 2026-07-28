@@ -123,26 +123,43 @@ class DatabaseEvaluationWiringIntegrationTest {
         EvaluationManifest manifest = new EvaluationManifest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 "tool-v1", "rule-v1", published.id(), "score-v1", "judge-v1");
         String requiredCitation = "mock://" + manifest.knowledgeVersionId();
-        jdbc.update("UPDATE evaluation_sample_snapshot SET snapshot_payload = ?::jsonb WHERE tenant_id = ? AND dataset_version_id = ?",
-                "{\"allowedTools\":[\"mall.order.read\"],\"citationRequirements\":[\"" + requiredCitation + "\"],\"expectedHumanHandoff\":true}", tenant, published.id());
+        UUID configuredSampleId = UUID.randomUUID();
+        jdbc.update("INSERT INTO evaluation_sample_snapshot (id, tenant_id, dataset_version_id, sample_json, candidate_id, snapshot_payload) VALUES (?, ?, ?, ?::jsonb, ?, ?::jsonb)",
+                configuredSampleId, tenant, published.id(), "{\"input\":\"configured sample\",\"expected\":{\"intent\":\"ORDER_STATUS\"}}", candidateId,
+                "{\"allowedTools\":[\"mall.order.read\"],\"prohibitedTools\":[\"admin.delete\"],\"parameterConstraints\":{\"region\":\"CN\",\"limit\":10},\"citationRequirements\":[\"" + requiredCitation + "\"],\"factAssertions\":[\"orderExists\"],\"safetyLabels\":[\"PII\"],\"expectedHumanHandoff\":true,\"weights\":{\"quality\":0.8},\"applicableMetrics\":[\"intent\",\"tool\"]}");
 
-        var fixture = new JdbcDatasetSnapshotPort(jdbc).published(tenant, published.id()).get(0);
+        var fixture = new JdbcDatasetSnapshotPort(jdbc).published(tenant, published.id()).stream()
+                .filter(value -> value.sampleId().equals(configuredSampleId)).findFirst().orElseThrow();
         assertEquals(List.of("mall.order.read"), fixture.allowedTools());
+        assertEquals(List.of("admin.delete"), fixture.prohibitedTools());
+        assertEquals(Map.of("region", "CN", "limit", 10), fixture.parameterConstraints());
         assertEquals(List.of(requiredCitation), fixture.requiredCitations());
+        assertEquals(List.of("orderExists"), fixture.factAssertions());
+        assertEquals(List.of("PII"), fixture.safetyLabels());
         assertTrue(fixture.expectsHumanHandoff());
+        assertEquals(Map.of("quality", 0.8), fixture.weights());
+        assertEquals(List.of("intent", "tool"), fixture.applicableMetrics());
 
         UUID runId = runs.startMock(tenant, manifest);
 
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
-        String result = jdbc.queryForObject("SELECT evidence_json::text FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", String.class, tenant, runId);
-        String evidence = jdbc.queryForObject("SELECT evidence_payload::text FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", String.class, tenant, runId);
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_result WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ?", Integer.class, tenant, runId));
+        String result = jdbc.queryForObject("SELECT evidence_json::text FROM evaluation_result WHERE tenant_id = ? AND run_id = ? AND sample_id = ?", String.class, tenant, runId, configuredSampleId);
+        String evidence = jdbc.queryForObject("SELECT evidence_payload::text FROM evaluation_metric_evidence WHERE tenant_id = ? AND run_id = ? AND evidence_payload->>'sampleId' = ?", String.class, tenant, runId, configuredSampleId.toString());
         assertTrue(result.contains("mall.order.read"));
         assertTrue(result.contains(requiredCitation));
         assertTrue(JSON.readTree(result).path("humanHandoff").asBoolean());
         assertTrue(evidence.contains("mall.order.read"));
         assertTrue(evidence.contains(requiredCitation));
         assertTrue(JSON.readTree(evidence).path("result").path("humanHandoff").asBoolean());
+        var constraints = JSON.readTree(evidence).path("fixture");
+        assertEquals("admin.delete", constraints.path("prohibitedTools").get(0).asText());
+        assertEquals("CN", constraints.path("parameterConstraints").path("region").asText());
+        assertEquals(10, constraints.path("parameterConstraints").path("limit").asInt());
+        assertEquals("orderExists", constraints.path("factAssertions").get(0).asText());
+        assertEquals("PII", constraints.path("safetyLabels").get(0).asText());
+        assertEquals(0.8, constraints.path("weights").path("quality").asDouble());
+        assertEquals("intent", constraints.path("applicableMetrics").get(0).asText());
         assertEquals("COMPLETED", jdbc.queryForObject("SELECT status FROM evaluation_run WHERE tenant_id = ? AND id = ?", String.class, tenant, runId));
     }
 

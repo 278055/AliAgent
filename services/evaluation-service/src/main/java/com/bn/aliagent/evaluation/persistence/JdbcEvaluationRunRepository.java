@@ -28,7 +28,8 @@ public final class JdbcEvaluationRunRepository implements EvaluationRunRepositor
             String state = jdbc.query("SELECT status FROM evaluation_run WHERE tenant_id = ? AND id = ? FOR UPDATE", rs -> rs.next() ? rs.getString(1) : null, tenantId, runId);
             if (!"RUNNING".equals(state)) throw new IllegalStateException("evaluation run is not running");
             jdbc.update("INSERT INTO evaluation_result (id, tenant_id, run_id, sample_id, evidence_json) VALUES (?, ?, ?, ?, CAST(? AS jsonb))", UUID.randomUUID(), tenantId, runId, fixture.sampleId(), write(result));
-            jdbc.update("INSERT INTO evaluation_metric_evidence (tenant_id, evidence_id, run_id, metric_name, metric_value, evidence_payload) VALUES (?, ?, ?, 'replay', 1, CAST(? AS jsonb))", tenantId, UUID.randomUUID(), runId, write(Map.of("sampleId", fixture.sampleId(), "result", result)));
+            jdbc.update("INSERT INTO evaluation_metric_evidence (tenant_id, evidence_id, run_id, metric_name, metric_value, evidence_payload) VALUES (?, ?, ?, 'replay', 1, CAST(? AS jsonb))", tenantId, UUID.randomUUID(), runId,
+                    write(Map.of("sampleId", fixture.sampleId(), "fixture", fixture, "result", result)));
         });
     }
     @Override public void complete(String tenantId, UUID runId) {

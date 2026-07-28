@@ -2,10 +2,10 @@ package com.bn.aliagent.evaluation.persistence;
 
 import com.bn.aliagent.evaluation.replay.ReplayFixture;
 import com.bn.aliagent.evaluation.runner.DatasetSnapshotPort;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,10 +33,10 @@ public final class JdbcDatasetSnapshotPort implements DatasetSnapshotPort {
             JsonNode expected = sample.path("expected");
             List<String> allowedTools = strings(snapshot.path("allowedTools"));
             List<String> citationRequirements = strings(snapshot.path("citationRequirements"));
-            return new ReplayFixture(sampleId, "published", sample.path("input").asText(), expected.path("intent").asText("MOCK_INTENT"),
+            return new ReplayFixture(sampleId, "published", text(sample, "input"), optionalText(expected, "intent", "MOCK_INTENT"),
                     allowedTools, citationRequirements, !citationRequirements.isEmpty(), allowedTools.contains("mall.order.read"),
-                    expected.path("toolFailure").asBoolean(false), snapshot.path("expectedHumanHandoff").asBoolean(false),
-                    expected.path("openEnded").asBoolean(false), strings(snapshot.path("prohibitedTools")),
+                    optionalBoolean(expected, "toolFailure", false), optionalBoolean(snapshot, "expectedHumanHandoff", false),
+                    optionalBoolean(expected, "openEnded", false), strings(snapshot.path("prohibitedTools")),
                     map(snapshot.path("parameterConstraints")), strings(snapshot.path("factAssertions")),
                     strings(snapshot.path("safetyLabels")), weights(snapshot.path("weights")), strings(snapshot.path("applicableMetrics")));
         } catch (Exception exception) {
@@ -45,14 +45,63 @@ public final class JdbcDatasetSnapshotPort implements DatasetSnapshotPort {
     }
 
     private List<String> strings(JsonNode value) {
-        return value.isArray() ? json.convertValue(value, new TypeReference<List<String>>() { }) : List.of();
+        if (!value.isArray()) {
+            throw invalid("数组", value);
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : value) {
+            if (!item.isTextual()) {
+                throw invalid("字符串数组", value);
+            }
+            values.add(item.textValue());
+        }
+        return List.copyOf(values);
     }
 
     private Map<String, Object> map(JsonNode value) {
-        return value.isObject() ? json.convertValue(value, new TypeReference<LinkedHashMap<String, Object>>() { }) : Map.of();
+        if (!value.isObject()) {
+            throw invalid("对象", value);
+        }
+        return json.convertValue(value, new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, Object>>() { });
     }
 
     private Map<String, Double> weights(JsonNode value) {
-        return value.isObject() ? json.convertValue(value, new TypeReference<LinkedHashMap<String, Double>>() { }) : Map.of();
+        if (!value.isObject()) {
+            throw invalid("数值对象", value);
+        }
+        Map<String, Double> values = new LinkedHashMap<>();
+        value.fields().forEachRemaining(entry -> {
+            if (!entry.getValue().isNumber()) {
+                throw invalid("数值对象", value);
+            }
+            values.put(entry.getKey(), entry.getValue().doubleValue());
+        });
+        return Map.copyOf(values);
+    }
+
+    private String text(JsonNode parent, String field) {
+        JsonNode value = parent.path(field);
+        if (!value.isTextual()) {
+            throw invalid(field + "字符串", value);
+        }
+        return value.textValue();
+    }
+
+    private String optionalText(JsonNode parent, String field, String fallback) {
+        JsonNode value = parent.path(field);
+        if (value.isMissingNode() || value.isNull()) return fallback;
+        if (!value.isTextual()) throw invalid(field + "字符串", value);
+        return value.textValue();
+    }
+
+    private boolean optionalBoolean(JsonNode parent, String field, boolean fallback) {
+        JsonNode value = parent.path(field);
+        if (value.isMissingNode() || value.isNull()) return fallback;
+        if (!value.isBoolean()) throw invalid(field + "布尔值", value);
+        return value.booleanValue();
+    }
+
+    private IllegalStateException invalid(String expected, JsonNode actual) {
+        return new IllegalStateException("已发布评测快照字段类型无效，期望" + expected + "，实际为" + actual.getNodeType());
     }
 }

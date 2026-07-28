@@ -26,6 +26,59 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 class JdbcDatasetWorkflowIntegrationTest {
     @Test
+    void rejectsDirectUpdateAndDeleteOfPublishedSnapshot() {
+        String schema = "test_p8_snapshot_immutable_" + UUID.randomUUID().toString().replace("-", "");
+        String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;
+        JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "postgres", "123456"));
+        jdbc.execute("CREATE SCHEMA " + schema);
+        try {
+            Flyway.configure().dataSource(url, "postgres", "123456").schemas(schema)
+                    .locations("filesystem:" + Path.of("src/main/resources/db/migration").toAbsolutePath()).load().migrate();
+            UUID dataset = UUID.randomUUID();
+            UUID version = UUID.randomUUID();
+            UUID snapshot = UUID.randomUUID();
+            UUID candidate = insertAcceptedCandidate(jdbc);
+            jdbc.update("INSERT INTO evaluation_dataset (id, tenant_id, name, state) VALUES (?, 'test-tenant', 'immutable', 'PUBLISHED')", dataset);
+            jdbc.update("INSERT INTO evaluation_dataset_version (id, tenant_id, dataset_id, version_number, content_digest, visibility) VALUES (?, 'test-tenant', ?, 1, ?, 'PRIVATE')", version, dataset, "a".repeat(64));
+            jdbc.update("INSERT INTO evaluation_sample_snapshot (id, tenant_id, dataset_version_id, sample_json, candidate_id, snapshot_payload) VALUES (?, 'test-tenant', ?, '{\"input\":\"test\",\"expected\":{}}'::jsonb, ?, '{}'::jsonb)", snapshot, version, candidate);
+
+            assertThrows(RuntimeException.class, () -> jdbc.update("UPDATE evaluation_sample_snapshot SET sample_json = '{\"input\":\"changed\"}'::jsonb WHERE id = ?", snapshot));
+            assertThrows(RuntimeException.class, () -> jdbc.update("DELETE FROM evaluation_sample_snapshot WHERE id = ?", snapshot));
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
+
+    @Test
+    void rejectsCoercedSnapshotConstraintTypes() {
+        String schema = "test_p8_snapshot_types_" + UUID.randomUUID().toString().replace("-", "");
+        String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;
+        JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(url, "postgres", "123456"));
+        jdbc.execute("CREATE SCHEMA " + schema);
+        try {
+            Flyway.configure().dataSource(url, "postgres", "123456").schemas(schema)
+                    .locations("filesystem:" + Path.of("src/main/resources/db/migration").toAbsolutePath()).load().migrate();
+            UUID dataset = UUID.randomUUID();
+            UUID version = UUID.randomUUID();
+            UUID candidate = insertAcceptedCandidate(jdbc);
+            jdbc.update("INSERT INTO evaluation_dataset (id, tenant_id, name, state) VALUES (?, 'test-tenant', 'typed', 'PUBLISHED')", dataset);
+            jdbc.update("INSERT INTO evaluation_dataset_version (id, tenant_id, dataset_id, version_number, content_digest, visibility) VALUES (?, 'test-tenant', ?, 1, ?, 'PRIVATE')", version, dataset, "b".repeat(64));
+            jdbc.update("INSERT INTO evaluation_sample_snapshot (id, tenant_id, dataset_version_id, sample_json, candidate_id, snapshot_payload) VALUES (?, 'test-tenant', ?, '{\"input\":\"test\",\"expected\":{\"intent\":\"GENERAL\"}}'::jsonb, ?, '{\"allowedTools\":[1,true],\"prohibitedTools\":[],\"parameterConstraints\":{},\"citationRequirements\":[],\"factAssertions\":[],\"safetyLabels\":[],\"expectedHumanHandoff\":false,\"weights\":{\"quality\":\"1.0\"},\"applicableMetrics\":[]}'::jsonb)", UUID.randomUUID(), version, candidate);
+
+            assertThrows(IllegalStateException.class, () -> new JdbcDatasetSnapshotPort(jdbc).published("test-tenant", version));
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
+
+    private UUID insertAcceptedCandidate(JdbcTemplate jdbc) {
+        UUID candidate = UUID.randomUUID();
+        jdbc.update("INSERT INTO evaluation_candidate (id, tenant_id, source_event_id, anonymized_body, body_digest, status, anonymization_rule_version, expires_at) VALUES (?, 'test-tenant', ?, '{}'::jsonb, ?, 'ACCEPTED', 'test-v1', ?)",
+                candidate, UUID.randomUUID(), "f".repeat(64), Timestamp.from(Instant.now().plusSeconds(3600)));
+        return candidate;
+    }
+
+    @Test
     void persistsReviewedCandidateAndImmutablePublishedSnapshotWithTenantIsolation() throws Exception {
         String schema = "test_p8_dataset_" + UUID.randomUUID().toString().replace("-", "");
         String url = "jdbc:postgresql://localhost:5432/postgres?currentSchema=" + schema;
