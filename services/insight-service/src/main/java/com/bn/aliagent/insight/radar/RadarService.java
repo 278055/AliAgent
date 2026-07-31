@@ -1,0 +1,2 @@
+package com.bn.aliagent.insight.radar; import java.time.*; import java.util.*;
+public final class RadarService { private final Map<String,ProblemRadar> radars=new HashMap<>(); public ProblemRadar open(String tenant,String type,Map<String,String> dims,Instant start,Instant end,int metricVersion,int thresholdVersion,int aggregateRevision){var key=tenant+"|"+type+"|"+new TreeMap<>(dims)+"|"+start+"|"+end;return radars.computeIfAbsent(key,k->ProblemRadar.open(tenant,type,dims,start,end,metricVersion,thresholdVersion,aggregateRevision));}}
