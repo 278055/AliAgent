@@ -28,7 +28,7 @@ C 不直接接入 DashScope、pgvector、A/B 数据库或 Gateway；通过 C 包
 ```powershell
 D:\Java_Tools\Maven\apache-maven-3.9.6\bin\mvn.cmd -pl services/insight-service -Dtest='*Topic*,*Cluster*,*Gap*,*Query*' test
 D:\Java_Tools\Maven\apache-maven-3.9.6\bin\mvn.cmd -pl services/insight-service test
-pnpm --dir frontend --filter aliagent-admin build
+D:\Java_Tools\nodejs\pnpm.cmd --dir frontend --filter '@aliagent/admin' build
 git diff --check
 ```
 

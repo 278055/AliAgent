@@ -557,7 +557,7 @@ Run:
 ```powershell
 D:\Java_Tools\Maven\apache-maven-3.9.6\bin\mvn.cmd -pl services/insight-service -Dtest='*Topic*,*Cluster*,*Gap*,*Query*' test
 D:\Java_Tools\Maven\apache-maven-3.9.6\bin\mvn.cmd -pl services/insight-service test
-pnpm --dir frontend --filter aliagent-admin build
+D:\Java_Tools\nodejs\pnpm.cmd --dir frontend --filter '@aliagent/admin' build
 git diff --check
 ```
 
@@ -687,7 +687,7 @@ Run:
 
 ```powershell
 D:\Java_Tools\Maven\apache-maven-3.9.6\bin\mvn.cmd -pl services/gateway-service test
-pnpm --dir frontend --filter aliagent-admin build
+D:\Java_Tools\nodejs\pnpm.cmd --dir frontend --filter '@aliagent/admin' build
 ```
 
 Expected: PASS。
@@ -714,7 +714,7 @@ git merge --no-ff codex/p9-insight-query-ui
 
 ```powershell
 D:\Java_Tools\Maven\apache-maven-3.9.6\bin\mvn.cmd test
-pnpm --dir frontend --filter aliagent-admin build
+D:\Java_Tools\nodejs\pnpm.cmd --dir frontend --filter '@aliagent/admin' build
 git diff --check
 ```
 
