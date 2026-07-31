@@ -1,0 +1,2 @@
+package com.bn.aliagent.insight.aggregate; import java.time.*; import java.util.*;
+public interface AggregationStore { Optional<AggregateRevision> latest(AggregateKey key); AggregateRevision append(AggregateRevision revision,int expectedPreviousRevision); default List<AggregateRevision> hourly(String tenant,String metric,int version,LocalDate date,ZoneId zone,SortedMap<String,String> dimensions){throw new UnsupportedOperationException();} }

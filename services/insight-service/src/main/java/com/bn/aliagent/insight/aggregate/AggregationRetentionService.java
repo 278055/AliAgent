@@ -1,0 +1,2 @@
+package com.bn.aliagent.insight.aggregate; import java.time.*;
+public final class AggregationRetentionService { private final AggregateRetentionTarget target; private final Clock clock; public AggregationRetentionService(AggregateRetentionTarget target,Clock clock){this.target=target;this.clock=clock;} public void clean(String tenantId,int batchSize){Instant now=clock.instant();target.deleteHourlyBefore(tenantId,now.minus(Duration.ofDays(180)),batchSize);target.deleteDailyBefore(tenantId,LocalDate.now(clock).minusYears(2),batchSize);} }
