@@ -115,6 +115,24 @@ class TrustedIdentityGatewayFilterTest {
         assertEvaluationStatus(identitySecret, serviceSecret, "/api/v1/evaluation/candidates", "not-a-jwt", org.springframework.http.HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void insightUsesItsOwnAudienceAndSeparatesOperatorReadFromSupervisorWrite() {
+        String identitySecret = "test-identity-jwt-secret-must-be-at-least-32-bytes";
+        String serviceSecret = "test-service-jwt-secret-must-be-at-least-32-bytes";
+        AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
+        var read = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/insights/radars")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "operator", "STAFF", List.of("STAFF", "INSIGHT_OPERATOR"))).build());
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> "snapshot")
+                .filter(read, exchange -> { forwarded.set(exchange.getRequest().getHeaders()); return reactor.core.publisher.Mono.empty(); }).block();
+        new ServiceJwtSupport(serviceSecret).verify(forwarded.get().getFirst("X-Service-Authorization").substring(7), "insight-service", "GET:/api/v1/insights/radars");
+
+        var write = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/insights/thresholds")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + identityToken(identitySecret, "operator", "STAFF", List.of("STAFF", "INSIGHT_OPERATOR"))).build());
+        new TrustedIdentityGatewayFilter(identitySecret, serviceSecret, (identity, trace, request) -> "snapshot")
+                .filter(write, exchange -> reactor.core.publisher.Mono.empty()).block();
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, write.getResponse().getStatusCode());
+    }
+
     private static void assertEvaluationRole(String identitySecret, String serviceSecret, String path, String role) {
         AtomicReference<HttpHeaders> forwarded = new AtomicReference<>();
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path)

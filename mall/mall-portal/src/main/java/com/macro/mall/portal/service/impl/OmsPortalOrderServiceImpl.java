@@ -16,6 +16,7 @@ import com.macro.mall.portal.domain.*;
 import com.macro.mall.portal.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -65,6 +66,10 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
     private OmsOrderItemMapper orderItemMapper;
     @Autowired
     private CancelOrderSender cancelOrderSender;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Value("${jwt.tenant-id}")
+    private String tenantId;
 
     @Override
     public ConfirmOrderResult generateConfirmOrder(List<Long> cartIds) {
@@ -222,6 +227,7 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
         // TODO: 2018/9/3 bill_*,delivery_*
         //插入order表和order_item表
         orderMapper.insert(order);
+        jdbcTemplate.update("INSERT INTO order_tenant_binding(order_id,tenant_id,source,bound_by) VALUES (?,?,?,?)", order.getId(), tenantId, "ORDER_CREATION", "mall-portal");
         for (OmsOrderItem orderItem : orderItemList) {
             orderItem.setOrderId(order.getId());
             orderItem.setOrderSn(order.getOrderSn());
@@ -261,6 +267,12 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
         //恢复所有下单商品的锁定库存，扣减真实库存
         OmsOrderDetail orderDetail = portalOrderDao.getDetail(orderId);
         int count = portalOrderDao.updateSkuStock(orderDetail.getOrderItemList());
+        if (count > 0) {
+            OmsOrder persisted = orderMapper.selectByPrimaryKey(orderId);
+            String boundTenant = jdbcTemplate.query("SELECT tenant_id FROM order_tenant_binding WHERE order_id=?", new Object[]{orderId}, (rs, row) -> rs.getString(1)).stream().findFirst().orElseThrow(() -> new SecurityException("ORDER_TENANT_MISMATCH"));
+            Date orderCreatedAt = persisted.getCreateTime();
+            jdbcTemplate.update("INSERT IGNORE INTO mall_insight_outbox(event_id,order_id,event_type,tenant_id,trace_id,amount,order_occurred_at,occurred_at,status,next_attempt_at) VALUES (?,?,?,?,?,?,?,?,?,?)", UUID.randomUUID().toString(), orderId, "order.paid", boundTenant, "order-" + orderId, persisted.getPayAmount(), new java.sql.Timestamp(orderCreatedAt.getTime()), new java.sql.Timestamp(System.currentTimeMillis()), "PENDING", new java.sql.Timestamp(System.currentTimeMillis()));
+        }
         return count;
     }
 

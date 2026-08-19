@@ -16,11 +16,17 @@ public final class TopicClusterService {
     public TopicCluster cluster(TopicInput input, TopicClusteringVersion version) {
         TopicRisk risk = classifier.classify(input.anonymizedText());
         if (risk != TopicRisk.NORMAL) return snapshot("rule-" + input.memberId(), input, risk, version, List.of(input.memberId()));
-        EmbeddingVector vector = embeddings.embed(input.tenantId(), input.anonymizedText(), version.embeddingVersion());
-        vector = new EmbeddingVector(input.tenantId(), input.memberId(), vector.modelVersion(), vector.values());
-        List<ClusterMembership> memberships = clustering.cluster(input.tenantId(), "GENERAL", List.of(vector), version.parameters());
-        String clusterId = memberships.isEmpty() ? "cluster-" + input.memberId() : memberships.get(0).clusterId();
-        return snapshot(clusterId, input, risk, version, memberships.stream().map(ClusterMembership::memberId).toList());
+        try {
+            EmbeddingVector vector = embeddings.embed(input.tenantId(), input.anonymizedText(), version.embeddingVersion());
+            vector = new EmbeddingVector(input.tenantId(), input.memberId(), vector.modelVersion(), vector.values());
+            List<ClusterMembership> memberships = clustering.cluster(input.tenantId(), "GENERAL", List.of(vector), version.parameters());
+            String clusterId = memberships.isEmpty() ? "pending-" + input.memberId() : memberships.get(0).clusterId();
+            List<String> members = memberships.isEmpty() ? List.of(input.memberId()) : memberships.stream().map(ClusterMembership::memberId).toList();
+            return snapshot(clusterId, input, risk, version, members);
+        } catch (RuntimeException ignored) {
+            // 向量依赖不可用时只保留原始成员，绝不推断其他成员或改变风险分类。
+            return snapshot("pending-" + input.memberId(), input, risk, version, List.of(input.memberId()));
+        }
     }
 
     private TopicCluster snapshot(String clusterId, TopicInput input, TopicRisk risk, TopicClusteringVersion version, List<String> members) {

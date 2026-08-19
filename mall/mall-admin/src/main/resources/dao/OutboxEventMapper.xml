@@ -5,6 +5,10 @@
     INSERT INTO outbox_event(event_id,event_type,event_version,occurred_at,tenant_id,trace_id,producer,payload,status,attempts,next_attempt_at)
     VALUES(#{eventId},#{eventType},#{eventVersion},#{occurredAt},#{tenantId},#{traceId},#{producer},#{payload},#{status},#{attempts},#{nextAttemptAt})
   </insert>
+  <insert id="insertIfAbsent" parameterType="com.macro.mall.event.OutboxEvent">
+    INSERT IGNORE INTO outbox_event(event_id,event_type,event_version,occurred_at,tenant_id,trace_id,producer,payload,status,attempts,next_attempt_at)
+    VALUES(#{eventId},#{eventType},#{eventVersion},#{occurredAt},#{tenantId},#{traceId},#{producer},#{payload},#{status},#{attempts},#{nextAttemptAt})
+  </insert>
   <select id="findDue" resultType="com.macro.mall.event.OutboxEvent">
     SELECT * FROM outbox_event WHERE status IN ('PENDING','RETRY') AND next_attempt_at &lt;= #{now}
     ORDER BY occurred_at LIMIT #{limit}

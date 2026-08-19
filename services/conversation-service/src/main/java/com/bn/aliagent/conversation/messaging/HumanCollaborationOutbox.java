@@ -21,7 +21,7 @@ public final class HumanCollaborationOutbox {
         HumanCollaborationEvent event = new HumanCollaborationEvent(UUID.randomUUID(), eventType, tenantId, conversationId, requestId, Instant.now(), sender, content, status, authorizationSnapshotId, subjectId, subjectType, roles, permissions);
         try {
             int version = "copilot.suggestion.requested.v2".equals(eventType) ? 2 : 1;
-            String topic = version == 2 ? "copilot.suggestion.requested.v2" : "conversation.human.events.v1";
+            String topic = version == 2 ? "copilot.suggestion.requested.v2" : isP9Event(eventType) ? "insight.events.v1" : "conversation.human.events.v1";
             jdbc.update("INSERT INTO human_collaboration_outbox (id,tenant_id,aggregate_id,request_id,topic,event_type,event_version,payload,status) VALUES (?,?,?,?,?,?,?,CAST(? AS jsonb),'PENDING') ON CONFLICT (tenant_id,request_id,event_type) DO NOTHING", event.eventId(), tenantId, conversationId, requestId, topic, eventType, version, json.writeValueAsString(event));
         } catch (JsonProcessingException exception) { throw new IllegalStateException("human collaboration event serialization failed", exception); }
     }
@@ -30,4 +30,5 @@ public final class HumanCollaborationOutbox {
     }
     public void markPublished(UUID eventId) { jdbc.update("UPDATE human_collaboration_outbox SET status='PUBLISHED' WHERE id=? AND status='PENDING'", eventId); }
     private HumanCollaborationEvent read(String value) { try { return json.readValue(value, HumanCollaborationEvent.class); } catch (JsonProcessingException exception) { throw new IllegalStateException("human collaboration event payload is invalid", exception); } }
+    private static boolean isP9Event(String eventType) { return "conversation.completed".equals(eventType) || "conversation.feedback.received".equals(eventType) || "conversation.human.requested".equals(eventType) || "conversation.human.first-public-reply".equals(eventType); }
 }

@@ -12,10 +12,14 @@ import com.macro.mall.model.OmsOrderOperateHistory;
 import com.macro.mall.service.OmsOrderService;
 import com.macro.mall.event.DomainEventTypes;
 import com.macro.mall.event.OutboxEventService;
+import com.macro.mall.insight.P9LogisticsExceptionEventMapper;
+import com.macro.mall.insight.TrustedOrderTenantResolver;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,6 +39,8 @@ public class OmsOrderServiceImpl implements OmsOrderService {
     private OmsOrderOperateHistoryMapper orderOperateHistoryMapper;
     @Autowired
     private OutboxEventService outboxEventService;
+    @Autowired
+    private TrustedOrderTenantResolver trustedOrderTenantResolver;
 
     @Override
     public List<OmsOrder> list(OmsOrderQueryParam queryParam, Integer pageSize, Integer pageNum) {
@@ -43,7 +49,15 @@ public class OmsOrderServiceImpl implements OmsOrderService {
     }
 
     @Override
+    @Transactional
     public int delivery(List<OmsOrderDeliveryParam> deliveryParamList) {
+        // 仅在物流信息不完整时形成物流异常；租户必须来自订单创建时的可信绑定。
+        java.util.Map<Long, String> exceptionTenants = new java.util.HashMap<>();
+        for (OmsOrderDeliveryParam item : deliveryParamList) {
+            if (item.getDeliverySn() == null || item.getDeliverySn().trim().isEmpty()) {
+                exceptionTenants.put(item.getOrderId(), trustedOrderTenantResolver.requireTenantId(item.getOrderId()));
+            }
+        }
         //批量发货
         int count = orderDao.delivery(deliveryParamList);
         //添加操作记录
@@ -58,8 +72,19 @@ public class OmsOrderServiceImpl implements OmsOrderService {
                     return history;
                 }).collect(Collectors.toList());
         orderOperateHistoryDao.insertList(operateHistoryList);
-        deliveryParamList.forEach(item -> outboxEventService.publish(outboxEventService.create(DomainEventTypes.ORDER_DELIVERED,
-                "mall-default", "order-" + item.getOrderId(), java.util.Map.of("orderId", item.getOrderId(), "trackingNo", item.getDeliverySn()))));
+        Instant occurredAt = Instant.now();
+        deliveryParamList.forEach(item -> {
+            String tenantId = exceptionTenants.get(item.getOrderId());
+            if (tenantId != null) {
+                outboxEventService.publishIfAbsent(P9LogisticsExceptionEventMapper.event(tenantId,
+                        "order-" + item.getOrderId(), item.getOrderId(), "MISSING_TRACKING_NUMBER", occurredAt));
+            } else {
+                String trustedTenantId = trustedOrderTenantResolver.requireTenantId(item.getOrderId());
+                outboxEventService.publish(outboxEventService.create(DomainEventTypes.ORDER_DELIVERED,
+                        trustedTenantId, "order-" + item.getOrderId(),
+                        java.util.Map.of("orderId", item.getOrderId(), "trackingNo", item.getDeliverySn())));
+            }
+        });
         return count;
     }
 

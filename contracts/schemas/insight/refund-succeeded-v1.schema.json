@@ -1,0 +1,1 @@
+{"type":"object","required":["evidenceRef","orderOccurredAt","amount","reasonCode"],"properties":{"evidenceRef":{"type":"string"},"orderOccurredAt":{"type":"string","format":"date-time"},"amount":{"type":"number"},"reasonCode":{"type":"string"}},"additionalProperties":false}

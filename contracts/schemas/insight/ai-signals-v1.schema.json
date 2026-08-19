@@ -1,0 +1,1 @@
+{"type":"object","required":["evidenceRef","signal"],"properties":{"evidenceRef":{"type":"string","minLength":1},"signal":{"enum":["rag-completed","citation-completed","refused","tool-failed","query-plan-accepted"]}},"additionalProperties":false}

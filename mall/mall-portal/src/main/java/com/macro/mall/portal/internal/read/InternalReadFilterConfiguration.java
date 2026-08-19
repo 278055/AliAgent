@@ -25,7 +25,7 @@ public class InternalReadFilterConfiguration {
     public FilterRegistrationBean<InternalReadAuthenticationFilter> internalReadAuthenticationFilterRegistration(
             InternalReadAuthenticationFilter filter) {
         FilterRegistrationBean<InternalReadAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.addUrlPatterns("/api/v1/internal/mall/*");
+        registration.addUrlPatterns("/api/v1/internal/mall/*", "/internal/v1/insights/evidence/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return registration;
     }

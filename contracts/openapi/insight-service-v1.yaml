@@ -1,0 +1,18 @@
+openapi: 3.0.3
+info: { title: AliAgent Operational Insight API, version: v1 }
+paths:
+  /api/v1/insights/metrics:
+    get: { summary: Read metrics, security: [{ ServiceJwt: [] }], responses: { '200': { description: OK }, '403': { description: Operator role required } } }
+  /api/v1/insights/radars:
+    get: { summary: Read problem radars, security: [{ ServiceJwt: [] }], responses: { '200': { description: OK } } }
+  /api/v1/insights/radars/{radarId}/actions:
+    post: { summary: Supervisor disposes a radar, security: [{ ServiceJwt: [] }], responses: { '202': { description: Accepted }, '403': { description: Supervisor role required } } }
+  /api/v1/insights/thresholds:
+    put: { summary: Supervisor updates thresholds, security: [{ ServiceJwt: [] }], responses: { '204': { description: Updated }, '403': { description: Supervisor role required } } }
+  /api/v1/insights/topics/{topicId}/review:
+    post: { summary: Supervisor reviews high risk topic, security: [{ ServiceJwt: [] }], responses: { '202': { description: Accepted }, '403': { description: Supervisor role required } } }
+  /api/v1/insights/orders/verify:
+    post: { summary: Supervisor verifies evidence for one radar response only, security: [{ ServiceJwt: [] }], responses: { '200': { description: Verification result }, '403': { description: Supervisor role required } } }
+components:
+  securitySchemes:
+    ServiceJwt: { type: http, scheme: bearer, bearerFormat: JWT }

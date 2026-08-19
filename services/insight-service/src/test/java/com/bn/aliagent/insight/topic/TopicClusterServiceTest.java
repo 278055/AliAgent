@@ -36,6 +36,19 @@ class TopicClusterServiceTest {
         assertEquals(List.of("m2"), cluster.members());
     }
 
+    @Test
+    void embeddingFailureKeepsOnlyOriginalMemberWithoutInventingClusterMembers() {
+        var service = new TopicClusterService(new TopicRuleClassifier(),
+                (tenant, text, model) -> { throw new IllegalStateException("embedding unavailable"); },
+                (tenant, type, vectors, parameters) -> { throw new AssertionError("不应调用聚类"); });
+
+        var cluster = service.cluster(new TopicInput("test-tenant", "m3", "物流一直没有更新"),
+                new TopicClusteringVersion("rules-v1", "embedding-v1", "cluster-v1", new ClusteringParameters(0.8, 2)));
+
+        assertEquals("pending-m3", cluster.clusterId());
+        assertEquals(List.of("m3"), cluster.members());
+    }
+
     private static final class RecordingEmbeddingPort implements EmbeddingPort {
         private int calls;
         public EmbeddingVector embed(String tenantId, String anonymizedText, String modelVersion) {

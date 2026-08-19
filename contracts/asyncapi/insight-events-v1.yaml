@@ -1,0 +1,28 @@
+asyncapi: 3.0.0
+info: { title: Operational insight events, version: 1.0.0 }
+channels:
+  insight.events.v1:
+    address: insight.events.v1
+    messages:
+      InsightEvent: { $ref: '#/components/messages/InsightEvent' }
+operations:
+  publishInsightEvent:
+    action: send
+    channel: { $ref: '#/channels/insight.events.v1' }
+components:
+  messages:
+    InsightEvent:
+      contentType: application/json
+      payload:
+        allOf:
+          - $ref: ../schemas/insight/event-envelope-v1.schema.json
+          - type: object
+            properties:
+              payload:
+                oneOf:
+                  - $ref: ../schemas/insight/order-paid-v1.schema.json
+                  - $ref: ../schemas/insight/refund-succeeded-v1.schema.json
+                  - $ref: ../schemas/insight/logistics-exception-v1.schema.json
+                  - $ref: ../schemas/insight/conversation-signals-v1.schema.json
+                  - $ref: ../schemas/insight/ai-signals-v1.schema.json
+                  - $ref: ../schemas/insight/knowledge-signals-v1.schema.json
