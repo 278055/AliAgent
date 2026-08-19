@@ -2,14 +2,44 @@ package com.bn.aliagent.orchestration.core;
 
 import com.bn.aliagent.orchestration.routing.Intent;
 import com.bn.aliagent.orchestration.routing.RuleFirstIntentRouter;
+import com.bn.aliagent.orchestration.insight.P9InsightEvent;
+import com.bn.aliagent.orchestration.insight.P9InsightOutbox;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrchestrationServiceTest {
+    @Test
+    void 应将运行结果以受限P9信号事务性写入Outbox() {
+        InMemoryExecutionStore store = new InMemoryExecutionStore();
+        SignallingRunner runner = new SignallingRunner(WorkflowOutcome.of("ai.rag.completed", "ai.citation.completed", "ai.query-plan.accepted"));
+        RecordingOutbox outbox = new RecordingOutbox();
+        OrchestrationService service = new OrchestrationService(store, new RuleFirstIntentRouter(input -> Intent.RAG), runner, outbox);
+
+        service.accept(request(UUID.randomUUID(), UUID.randomUUID()), "test-only-input");
+
+        assertEquals(List.of("ai.rag.completed", "ai.citation.completed", "ai.query-plan.accepted"), outbox.eventTypes);
+    }
+
+    @Test
+    void 依赖失败转人工时只写拒答和工具失败信号且不保存输入() {
+        InMemoryExecutionStore store = new InMemoryExecutionStore();
+        SignallingRunner runner = new SignallingRunner(WorkflowOutcome.of("ai.refused", "ai.tool.failed"));
+        RecordingOutbox outbox = new RecordingOutbox();
+        OrchestrationService service = new OrchestrationService(store, new RuleFirstIntentRouter(input -> Intent.ORDER_QUERY), runner, outbox);
+
+        service.accept(request(UUID.randomUUID(), UUID.randomUUID()), "身份证 110101199001011234");
+
+        assertEquals(List.of("ai.refused", "ai.tool.failed"), outbox.eventTypes);
+        assertEquals(2, outbox.events.size());
+        assertTrue(outbox.events.stream().allMatch(event -> !event.envelope().toString().contains("110101199001011234")));
+    }
     @Test
     void 重复事件和相同请求只应执行一次() {
         InMemoryExecutionStore store = new InMemoryExecutionStore();
@@ -49,6 +79,23 @@ class OrchestrationServiceTest {
 
     private static final class CountingRunner implements WorkflowRunner {
         private int calls;
-        @Override public void run(ExecutionRecord record, String input) { calls++; }
+        @Override public WorkflowOutcome run(ExecutionRecord record, String input) { calls++; return WorkflowOutcome.none(); }
+    }
+
+    private static final class SignallingRunner implements WorkflowRunner {
+        private final WorkflowOutcome outcome;
+        private SignallingRunner(WorkflowOutcome outcome) { this.outcome = outcome; }
+        @Override public WorkflowOutcome run(ExecutionRecord record, String input) { return outcome; }
+    }
+
+    private static final class RecordingOutbox implements P9InsightOutbox {
+        private final List<String> eventTypes = new ArrayList<>();
+        private final List<P9InsightEvent> events = new ArrayList<>();
+        @Override public void append(String tenantId, String traceId, UUID executionId, String eventType) {
+            eventTypes.add(eventType);
+            events.add(new P9InsightEvent(UUID.randomUUID(), eventType, tenantId, traceId, Instant.now(), "execution-" + executionId));
+        }
+        @Override public List<P9InsightEvent> pending(int limit) { return List.of(); }
+        @Override public void markPublished(UUID eventId) { }
     }
 }

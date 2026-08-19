@@ -1,0 +1,2 @@
+package com.bn.aliagent.insight.radar; import java.math.*; import java.util.*;
+public record TrendBaseline(BigDecimal sevenDay,BigDecimal twentyEightDay){public static TrendBaseline from(List<BigDecimal> samePeriod){BigDecimal average=samePeriod.stream().reduce(BigDecimal.ZERO,BigDecimal::add).divide(BigDecimal.valueOf(samePeriod.size()),4,RoundingMode.HALF_UP);return new TrendBaseline(average,average);}}

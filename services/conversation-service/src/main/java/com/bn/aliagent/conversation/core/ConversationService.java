@@ -36,9 +36,13 @@ public class ConversationService {
     @Transactional
     public Conversation patch(TrustedConversationRequestContext context, UUID id, String title, Boolean pinned, Boolean closed) {
         Conversation current = owned(context, id);
-        return repository.update(new Conversation(current.id(), current.tenantId(), current.ownerSubjectId(),
+        Conversation updated = repository.update(new Conversation(current.id(), current.tenantId(), current.ownerSubjectId(),
                 title == null ? current.title() : title, Boolean.TRUE.equals(closed) ? "CLOSED" : current.status(),
                 pinned == null ? current.pinned() : pinned, current.createdAt(), Instant.now()));
+        if (Boolean.TRUE.equals(closed) && !"CLOSED".equals(current.status())) {
+            humanOutbox.append("conversation.completed", context.tenantId(), id, context.requestId(), context.subjectId(), null, "CLOSED");
+        }
+        return updated;
     }
 
     @Transactional
@@ -104,9 +108,13 @@ public class ConversationService {
         ConversationPolicy.requireClientMessageId(clientMessageId);
         if (content == null || content.isBlank()) throw new ConversationException("CONV-400-002", "content is required");
         owned(context, conversationId);
-        return repository.findStaffMessage(context.tenantId(), context.subjectId(), conversationId, clientMessageId).orElseGet(() ->
-                repository.appendStaffMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId, 0,
-                        "STAFF", "TEXT", "PUBLIC", content, "COMPLETED", null, "{}", Instant.now()), context.subjectId(), clientMessageId));
+        return repository.findStaffMessage(context.tenantId(), context.subjectId(), conversationId, clientMessageId).orElseGet(() -> {
+            Message saved = repository.appendStaffMessage(new Message(UUID.randomUUID(), context.tenantId(), conversationId, 0,
+                    "STAFF", "TEXT", "PUBLIC", content, "COMPLETED", null, "{}", Instant.now()), context.subjectId(), clientMessageId);
+            humanOutbox.append("conversation.human.first-public-reply", context.tenantId(), conversationId, clientMessageId,
+                    context.subjectId(), null, "HUMAN_ACTIVE");
+            return saved;
+        });
     }
 
     @Transactional
@@ -121,7 +129,10 @@ public class ConversationService {
         Conversation current = owned(context, conversationId);
         if (!current.ownerSubjectId().equals(context.subjectId())) throw new ConversationException("TENANT-403-001", "Conversation is not owned by the caller");
         if ("CLOSED".equals(current.status())) throw new ConversationException("CONV-409-001", "Closed conversation cannot enter human queue");
-        return transition(context, conversationId, "WAITING_HUMAN");
+        Conversation updated = transition(context, conversationId, "WAITING_HUMAN");
+        humanOutbox.append("conversation.human.requested", context.tenantId(), conversationId, context.requestId(),
+                context.subjectId(), null, "WAITING_HUMAN");
+        return updated;
     }
 
     @Transactional

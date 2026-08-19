@@ -1,0 +1,1 @@
+{"type":"object","required":["evidenceRef","signal"],"properties":{"evidenceRef":{"type":"string"},"signal":{"enum":["completed","explicit-feedback","human-requested","first-human-public-reply"]},"score":{"type":"number"}},"additionalProperties":false}

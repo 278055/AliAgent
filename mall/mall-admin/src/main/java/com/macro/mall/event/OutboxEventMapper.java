@@ -8,6 +8,7 @@ import java.util.UUID;
 @Mapper
 public interface OutboxEventMapper {
     int insert(OutboxEvent event);
+    int insertIfAbsent(OutboxEvent event);
     List<OutboxEvent> findDue(Instant now, int limit);
     int markPublished(UUID eventId, Instant publishedAt);
     int markFailed(UUID eventId, int attempts, Instant nextAttemptAt, String error, String status);

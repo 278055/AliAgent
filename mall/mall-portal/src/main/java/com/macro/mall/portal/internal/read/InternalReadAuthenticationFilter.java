@@ -14,6 +14,7 @@ import java.util.Collections;
 
 public class InternalReadAuthenticationFilter extends OncePerRequestFilter {
     private static final String PATH_PREFIX = "/api/v1/internal/mall/";
+    private static final String INSIGHT_PATH_PREFIX = "/internal/v1/insights/evidence/";
     private static final String AUDIENCE = "mall";
     private static final String SCOPE = "mall.internal.read";
 
@@ -28,7 +29,7 @@ public class InternalReadAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith(PATH_PREFIX);
+        return !request.getRequestURI().startsWith(PATH_PREFIX) && !request.getRequestURI().startsWith(INSIGHT_PATH_PREFIX);
     }
 
     @Override

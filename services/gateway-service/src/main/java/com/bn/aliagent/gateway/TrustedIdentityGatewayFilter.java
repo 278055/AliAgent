@@ -25,6 +25,8 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
     private final String evaluationAdminRole;
     private final String versionAdminRole;
     private final String dashScopeApproverRole;
+    private static final String INSIGHT_OPERATOR_ROLE = "INSIGHT_OPERATOR";
+    private static final String SUPERVISOR_ROLE = "SUPERVISOR";
 
     @Autowired
     TrustedIdentityGatewayFilter(
@@ -58,11 +60,11 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
             if (authorization == null || !authorization.startsWith("Bearer ")) throw new IllegalArgumentException("Bearer token required");
             TrustedIdentity identity = identityJwt.verify(authorization.substring(7));
             String path = exchange.getRequest().getURI().getPath();
-            requireP7Role(path, identity);
+            requireP7Role(exchange.getRequest().getMethod().name(), path, identity);
             String traceId = UUID.randomUUID().toString();
             String requestId = UUID.randomUUID().toString();
             String scope = exchange.getRequest().getMethod().name() + ":" + path;
-            String audience = path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service"
+            String audience = path.startsWith("/api/v1/insights/") ? "insight-service" : path.startsWith("/api/v1/copilot/") ? "ai-orchestration-service"
                     : path.startsWith("/api/v1/evaluation/") ? "evaluation-service" : "conversation-service";
             String snapshotId = requiresKnowledgeSnapshot(path) ? snapshots.issue(identity, traceId, requestId) : null;
             var request = exchange.getRequest().mutate().headers(headers -> {
@@ -91,9 +93,12 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
 
     @Override public int getOrder() { return Ordered.HIGHEST_PRECEDENCE; }
 
-    private void requireP7Role(String path, TrustedIdentity identity) {
+    private void requireP7Role(String method, String path, TrustedIdentity identity) {
         if (path.startsWith("/api/v1/evaluation/")) {
             requireEvaluationRole(path, identity);
+        }
+        if (path.startsWith("/api/v1/insights/")) {
+            requireInsightRole(method, identity);
         }
         if (path.startsWith("/api/v1/copilot/") && !"STAFF".equals(identity.subjectType())) {
             throw new ForbiddenException();
@@ -123,6 +128,15 @@ final class TrustedIdentityGatewayFilter implements GlobalFilter, Ordered {
     private String evaluationRoot(String path) {
         String[] segments = path.split("/", 6);
         return segments.length > 4 ? segments[4] : "";
+    }
+
+    private void requireInsightRole(String method, TrustedIdentity identity) {
+        if (!"STAFF".equals(identity.subjectType())) throw new ForbiddenException();
+        boolean write = !"GET".equalsIgnoreCase(method);
+        if (write && !identity.roles().contains(SUPERVISOR_ROLE)) throw new ForbiddenException();
+        if (!write && !identity.roles().contains(INSIGHT_OPERATOR_ROLE) && !identity.roles().contains(SUPERVISOR_ROLE)) {
+            throw new ForbiddenException();
+        }
     }
 
     private boolean requiresKnowledgeSnapshot(String path) {

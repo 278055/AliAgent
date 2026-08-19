@@ -16,6 +16,7 @@ import com.bn.aliagent.orchestration.messaging.AiReplyRequestedV2Mapper;
 import com.bn.aliagent.orchestration.routing.Intent;
 import com.bn.aliagent.orchestration.routing.RuleFirstIntentRouter;
 import com.bn.aliagent.orchestration.runtime.ReadOnlyWorkflowRunner;
+import com.bn.aliagent.orchestration.insight.P9InsightOutbox;
 import com.bn.aliagent.orchestration.tool.MallReadToolAdapter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -24,9 +25,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.amqp.core.Queue;
 
 @Configuration
 public class OrchestrationRuntimeConfiguration {
+    @Bean Queue aiReplyRequestedV2Queue(@Value("${orchestration.messaging.ai-reply.v2-queue:ai.reply.requested.v2}") String queue) { return new Queue(queue, true); }
     @Bean
     @Profile("!database")
     ExecutionStore inMemoryExecutionStore() {
@@ -73,8 +76,8 @@ public class OrchestrationRuntimeConfiguration {
     }
 
     @Bean
-    OrchestrationService orchestrationService(ExecutionStore store, ReadOnlyWorkflowRunner runner) {
-        return new OrchestrationService(store, new RuleFirstIntentRouter(input -> Intent.GENERAL), runner);
+    OrchestrationService orchestrationService(ExecutionStore store, ReadOnlyWorkflowRunner runner, org.springframework.beans.factory.ObjectProvider<P9InsightOutbox> insightOutbox) {
+        return new OrchestrationService(store, new RuleFirstIntentRouter(input -> Intent.GENERAL), runner, insightOutbox.getIfAvailable());
     }
 
     @Bean

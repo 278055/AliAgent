@@ -13,6 +13,8 @@ public final class HumanCollaborationOutboxDispatcher {
             try {
                 if ("copilot.suggestion.requested.v2".equals(event.eventType())) {
                     rabbit.convertAndSend("copilot.suggestion.requested.v2", copilotEvent(event));
+                } else if (isP9Event(event.eventType())) {
+                    rabbit.convertAndSend("insight.events.v1", P9InsightEventMapper.map(event));
                 } else rabbit.convertAndSend("conversation.human.events.v1", event);
                 outbox.markPublished(event.eventId());
             }
@@ -29,4 +31,5 @@ public final class HumanCollaborationOutboxDispatcher {
         payload.put("roles", event.roles()); payload.put("permissions", event.permissions());
         return java.util.Map.of("eventId", event.eventId().toString(), "eventVersion", 2, "tenantId", event.tenantId(), "payload", payload);
     }
+    private static boolean isP9Event(String type) { return "conversation.completed".equals(type) || "conversation.feedback.received".equals(type) || "conversation.human.requested".equals(type) || "conversation.human.first-public-reply".equals(type); }
 }

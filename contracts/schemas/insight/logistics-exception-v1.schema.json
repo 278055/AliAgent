@@ -1,0 +1,1 @@
+{"type":"object","required":["evidenceRef","reasonCode"],"properties":{"evidenceRef":{"type":"string"},"reasonCode":{"type":"string"},"occurredAt":{"type":"string","format":"date-time"}},"additionalProperties":false}

@@ -22,6 +22,16 @@ public class OutboxEventService implements EventPublisher {
     @Override
     @Transactional
     public void publish(EventEnvelope event) {
+        persist(event, false);
+    }
+
+    /** 稳定事件标识重复写入时保持幂等，供 P9 事实事件使用。 */
+    @Transactional
+    public void publishIfAbsent(EventEnvelope event) {
+        persist(event, true);
+    }
+
+    private void persist(EventEnvelope event, boolean ignoreDuplicate) {
         if (event.getEventId() == null) throw new IllegalArgumentException("eventId不能为空");
         if (event.getEventVersion() != 1) throw new IllegalArgumentException("eventVersion必须为1");
         try {
@@ -31,7 +41,7 @@ public class OutboxEventService implements EventPublisher {
             row.setTenantId(event.getTenantId()); row.setTraceId(event.getTraceId());
             row.setProducer(event.getProducer()); row.setPayload(objectMapper.writeValueAsString(event.getPayload()));
             row.setStatus(PENDING); row.setNextAttemptAt(Instant.now());
-            mapper.insert(row);
+            if (ignoreDuplicate) mapper.insertIfAbsent(row); else mapper.insert(row);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("事件负载序列化失败", e);
         }

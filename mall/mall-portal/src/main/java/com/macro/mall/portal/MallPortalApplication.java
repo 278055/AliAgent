@@ -2,8 +2,10 @@ package com.macro.mall.portal;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = "com.macro.mall")
+@EnableScheduling
 public class MallPortalApplication {
 
     public static void main(String[] args) {

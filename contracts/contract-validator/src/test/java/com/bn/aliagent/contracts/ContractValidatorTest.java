@@ -105,4 +105,18 @@ class ContractValidatorTest {
         assertTrue(operation.at("/responses/400/description").asText().contains("tenant"));
         assertTrue(operation.path("responses").has("401"));
     }
+
+    @Test
+    void insightContractsFreezeTheV1EnvelopeAndSupervisorOperations() throws Exception {
+        ObjectMapper yaml = new ObjectMapper(new YAMLFactory());
+        JsonNode asyncApi = yaml.readTree(Path.of("..", "asyncapi", "insight-events-v1.yaml").toFile());
+        JsonNode api = yaml.readTree(Path.of("..", "openapi", "insight-service-v1.yaml").toFile());
+        JsonNode envelope = new ObjectMapper().readTree(Path.of("..", "schemas", "insight", "event-envelope-v1.schema.json").toFile());
+
+        assertEquals(1, envelope.at("/properties/eventVersion/const").asInt());
+        assertEquals("../schemas/insight/event-envelope-v1.schema.json",
+                asyncApi.at("/components/messages/InsightEvent/payload/allOf/0/$ref").asText());
+        assertTrue(api.at("/paths/~1api~1v1~1insights~1thresholds/put/security").isArray());
+        assertTrue(api.path("paths").has("/api/v1/insights/orders/verify"));
+    }
 }
