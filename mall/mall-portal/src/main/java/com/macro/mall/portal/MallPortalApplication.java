@@ -2,9 +2,10 @@ package com.macro.mall.portal;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-@SpringBootApplication(scanBasePackages = "com.macro.mall")
+@SpringBootApplication(scanBasePackages = "com.macro.mall", exclude = FlywayAutoConfiguration.class)
 @EnableScheduling
 public class MallPortalApplication {
 

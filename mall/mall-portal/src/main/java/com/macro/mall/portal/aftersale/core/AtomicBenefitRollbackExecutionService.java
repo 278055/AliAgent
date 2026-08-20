@@ -14,7 +14,7 @@ import java.util.UUID;
 
 /** 在同一 MySQL 事务内先占有步骤幂等键，再执行实际权益更新并落步骤和 Outbox 事实。 */
 @Service
-public final class AtomicBenefitRollbackExecutionService implements BenefitRollbackExecutionPort {
+public class AtomicBenefitRollbackExecutionService implements BenefitRollbackExecutionPort {
     private final AfterSaleJdbcRepository repository;
     private final BenefitRollbackPort benefits;
 
